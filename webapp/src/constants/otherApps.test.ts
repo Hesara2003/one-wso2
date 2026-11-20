@@ -118,6 +118,24 @@ describe("the registry", () => {
     const ids = OTHER_APPS.map((app) => app.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("gives every app a marketplace name, a hint and lower-case keywords", () => {
+    for (const app of OTHER_APPS) {
+      expect(app.marketplaceName.trim(), app.id).not.toBe("");
+      expect(app.hint.trim(), app.id).not.toBe("");
+      for (const keyword of app.keywords) expect(keyword, app.id).toBe(keyword.toLowerCase());
+    }
+  });
+
+  it("does not call the security team's site by the Security and Compliance perspective's own name", () => {
+    const site = OTHER_APPS.find((app) => app.id === "security-compliance-site");
+    expect(site?.label).toBe("Security & Compliance Google Site");
+    expect(site?.marketplaceName).toBe("Security & Compliance Portal");
+  });
+
+  it("links the rest of the People App from People Ops", () => {
+    expect(OTHER_APPS.find((app) => app.id === "people-app")?.perspective).toBe("people");
+  });
 });
 
 describe("the perspectives' rails", () => {
