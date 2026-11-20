@@ -46,6 +46,16 @@ describe("readOtherAppUrls", () => {
     });
   });
 
+  it("drops a scheme without //, which the browser would open on One WSO2's own site", () => {
+    expect(
+      readOtherAppUrls({
+        travel: "https:travel.example",
+        nexus: "http:nexus.example/repo",
+        netsuite: "HTTPS://netsuite.example",
+      }),
+    ).toEqual({ netsuite: "HTTPS://netsuite.example" });
+  });
+
   it("reads nothing from an absent or malformed value", () => {
     expect(readOtherAppUrls(undefined)).toEqual({});
     expect(readOtherAppUrls("https://netsuite.example")).toEqual({});
