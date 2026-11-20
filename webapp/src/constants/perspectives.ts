@@ -776,7 +776,7 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
     access: true,
     path: "/people-ops",
     forwardsToFirstItem: true,
-    sections: PEOPLE_OPS_SECTIONS,
+    sections: [...PEOPLE_OPS_SECTIONS, ...otherAppsSections("people")],
   },
   // Submitting a claim and looking up your own stay under Me (see ME_SECTIONS)
   // — those are things you do for yourself. Deciding other people's claims is
