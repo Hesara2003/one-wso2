@@ -222,6 +222,13 @@ export const PERSPECTIVE_HUES: Record<string, PerspectiveHue> = {
     light: { bg: "#ECEBFB", fg: "#6354DE" },
     dark: { bg: "#252131", fg: "#7B6DE3" },
   },
+
+  // A warm brown, the one family no other perspective uses.
+  "customer-success": {
+    hue: "#C47A50",
+    light: { bg: "#F1E6DF", fg: "#8A4B2A" },
+    dark: { bg: "#2A221E", fg: "#C47A50" },
+  },
 };
 
 export function perspectiveHue(key: string): PerspectiveHue | undefined {
