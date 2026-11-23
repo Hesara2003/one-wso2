@@ -241,15 +241,14 @@ export const googleOAuthClientId: string =
 export const googlePickerApiKey: string =
   window.config?.ONE_WSO2_PAR_GOOGLE_PICKER_API_KEY ?? "";
 
-// par-app's own admin-configurable rating names that trigger the Top 5%/20%
-// checkbox and the evidence-attachment requirement — real config, not
-// hardcoded constants, since Admin Portal → Configurations lets an admin
-// freely rename or remove entries from the org-wide parRatings list, and a
-// hardcoded trigger name would silently stop matching if that happened.
+// The ratings that unlock Top 5%/20% and need evidence, for deployments
+// where `par2` is off: there the cycle doesn't carry its own rating rules
+// (see ratingRulesFor in features/par/util/parLeadership.ts). They go with
+// the flag.
 export const top5p20pEnabledRating: string =
   window.config?.ONE_WSO2_PAR_TOP5P20P_ENABLED_RATING ?? "Successful";
 export const evidenceEnabledRating: string =
-  window.config?.ONE_WSO2_PAR_EVIDENCE_ENABLED_RATING ?? "Needs Improvement";
+  window.config?.ONE_WSO2_PAR_EVIDENCE_ENABLED_RATING ?? "Needs Improvements";
 
 export const parServiceUrls = {
   // GET /employees/{workEmail} — par-app's OWN employee record, distinct
@@ -318,14 +317,14 @@ export const parServiceUrls = {
   // GET — every response about an employee with names (their leads, report chain, PAR admins).
   parReviewResponses: (parCycleId: number, workEmail: string) =>
     `${parBackendUrl}/par-cycles/${parCycleId}/employees/${encodeURIComponent(workEmail)}/review-responses`,
-  // GET — the caller's own anonymised summary.
-  parReviewSummary: (parCycleId: number, workEmail: string) =>
-    `${parBackendUrl}/par-cycles/${parCycleId}/employees/${encodeURIComponent(workEmail)}/review-summary`,
+  // GET — how many 360° responses the caller has received (asked or offered), only the number.
+  parReviewCount: (parCycleId: number, workEmail: string) =>
+    `${parBackendUrl}/par-cycles/${parCycleId}/employees/${encodeURIComponent(workEmail)}/review-count`,
   // PUT — the lead's 360° summary of an employee, shared with their comment
   // (the employee's leads and PAR admins).
   parLead360Summary: (parCycleId: number, workEmail: string) =>
     `${parBackendUrl}/par-cycles/${parCycleId}/employees/${encodeURIComponent(workEmail)}/lead-360-summary`,
-  // GET — the AI-suggested 360° summary for the lead to start from.
+  // POST (asking may write one) — the AI-suggested 360° summary for the lead to start from.
   parLead360SummarySuggestion: (parCycleId: number, workEmail: string) =>
     `${parBackendUrl}/par-cycles/${parCycleId}/employees/${encodeURIComponent(workEmail)}/lead-360-summary/suggestion`,
   // GET — people to ask for 360° feedback, from the employee's calendar (the
@@ -395,23 +394,6 @@ export const parServiceUrls = {
   parLegacyHistory: (employeeEmail: string) =>
     `${parBackendUrl}/legacy-par-history/${encodeURIComponent(employeeEmail)}`,
 
-  // ---- F2F scheduling ---------------------------------------------------------
-  //
-  // Flat top-level paths on the same par-app backend, not nested under
-  // /par-cycles — service.bal's own resource layout.
-
-  // GET .../calendar/busy-times?date=YYYY-MM-DD — the invoker's and their
-  // lead's busy periods for that day (server resolves the lead; nothing
-  // about them is passed from here). Raw Google Calendar freebusy shape.
-  calendarBusyTimes: (date: string) =>
-    `${parBackendUrl}/calendar/busy-times?date=${encodeURIComponent(date)}`,
-  // POST .../calendar/schedule-f2f (ScheduleF2fRequest) — creates the Google
-  // Calendar event (with a Meet link Google generates) and emails both
-  // attendees the invite. Returns bare 201 with no body: the app never
-  // shows the Meet link itself, only a "meeting scheduled" confirmation —
-  // see ParScheduleF2fDialog.tsx.
-  calendarScheduleF2f: () => `${parBackendUrl}/calendar/schedule-f2f`,
-
   // ---- Admin Portal -------------------------------------------------------------
   //
   // Admin-gated server-side already (invokerDetails.isAdmin) — same backend
@@ -459,10 +441,6 @@ export const parServiceUrls = {
   // with a 307 redirect instead of passing on.
   legacyParHistoryCyclesParticipants: (cycleName: string, summary = false) =>
     `${parBackendUrl}/legacy-par-history-cycles/participants?cycleName=${encodeURIComponent(cycleName)}${summary ? "&summary=true" : ""}`,
-  // The older path form of the same request, for a backend that doesn't
-  // have the query-parameter route yet (see fetchLegacyCycleParticipants in useParAdmin.ts).
-  legacyParHistoryCyclesParticipantsByPath: (cycleName: string, summary = false) =>
-    `${parBackendUrl}/legacy-par-history-cycles/${encodeURIComponent(cycleName)}/participants${summary ? "?summary=true" : ""}`,
 
   // ---- Leadership 360° ------------------------------------------------------
   //

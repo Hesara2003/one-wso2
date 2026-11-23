@@ -303,7 +303,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/people-ops/subscriptions/manage",
     icon: TicketIcon,
     category: "People Ops",
-    requires: ["admin"],
     tags: ["Subscriptions", "Lunch", "Commute", "PickMe", "LaaS", "HR Admin"],
     hasWebApp: true,
     keywords: [
@@ -543,7 +542,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/finance/cc/approve",
     icon: CheckCheckIcon,
     category: "Finance",
-    requires: ["lead", "admin"],
     tags: ["Credit Card", "Approvals", "Expenses", "Reimbursements", "Team Cards"],
     hasWebApp: true,
     keywords: [
@@ -594,7 +592,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/finance/claim-approval",
     icon: CheckCheckIcon,
     category: "Finance",
-    requires: ["lead", "admin"],
     tags: ["Approvals", "Claims", "Finance", "Reimbursement"],
     hasWebApp: true,
     keywords: [
@@ -641,7 +638,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/finance/mis/arr-build",
     icon: ChartNoAxesCombinedIcon,
     category: "Finance",
-    requires: ["admin"],
     tags: ["MIS", "ARR", "QRR", "Revenue", "Metrics"],
     hasWebApp: true,
     keywords: [
@@ -665,7 +661,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/banking/admin",
     icon: LandmarkIcon,
     category: "Finance",
-    requires: ["admin"],
     tags: ["Banking", "Admin", "Change Requests", "Payroll", "Finance", "HR"],
     hasWebApp: true,
     keywords: [
@@ -687,7 +682,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/finance/master-data/subsidiaries",
     icon: DatabaseIcon,
     category: "Finance",
-    requires: ["admin"],
     tags: ["Master Data", "Finance", "Subsidiaries", "Departments", "Expense Types", "Credit Cards"],
     hasWebApp: true,
     keywords: [
@@ -836,7 +830,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/marketing-ops/ad-campaigns/analytics",
     icon: ChartColumnIcon,
     category: "Marketing Ops",
-    requires: ["admin"],
     tags: ["Advertising", "PPC", "LinkedIn Ads", "Google Ads", "Analytics"],
     hasWebApp: true,
     keywords: [
@@ -856,7 +849,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/marketing-ops/events/mine",
     icon: CalendarIcon,
     category: "Marketing Ops",
-    requires: ["admin"],
     tags: ["Events", "Conferences", "Webinars", "Speakers"],
     hasWebApp: true,
     keywords: [
@@ -894,7 +886,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/marketing-ops/crm-upload/pipelines",
     icon: RefreshCwIcon,
     category: "Marketing Ops",
-    requires: ["admin"],
     tags: ["CRM", "Upload", "Leads", "Accounts", "Pipelines", "Marketing Ops"],
     hasWebApp: true,
     keywords: [
@@ -915,7 +906,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/marketing-ops/design-studio/post-builder",
     icon: PaletteIcon,
     category: "Marketing Ops",
-    requires: ["admin"],
     tags: ["Design Studio", "Post Builder", "Graphics", "Banners", "LinkedIn", "Marketing Ops"],
     hasWebApp: true,
     keywords: [
@@ -936,7 +926,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/marketing-ops/email-workbench/create",
     icon: MegaphoneIcon,
     category: "Marketing Ops",
-    requires: ["admin"],
     tags: ["Email", "Workbench", "Pardot", "Templates", "Newsletter", "Marketing Ops"],
     hasWebApp: true,
     keywords: [
@@ -957,7 +946,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/marketing-ops/event-platform/events",
     icon: CalendarRangeIcon,
     category: "Marketing Ops",
-    requires: ["admin"],
     tags: ["Events", "Event Platform", "Speakers", "Agenda", "Conferences", "Marketing Ops"],
     hasWebApp: true,
     keywords: [
@@ -1021,7 +1009,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/legal/due-diligence/partners",
     icon: ScaleIcon,
     category: "Legal",
-    requires: ["admin"],
     tags: ["Due Diligence", "Partners", "Resellers", "Compliance", "Finance"],
     hasWebApp: true,
     keywords: [
@@ -1041,7 +1028,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/legal/due-diligence/trade-references",
     icon: ScaleIcon,
     category: "Legal",
-    requires: ["admin"],
     tags: ["Trade References", "Credit", "Partners", "Verification"],
     hasWebApp: true,
     keywords: [
@@ -1121,7 +1107,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/security/admin/users",
     icon: SlidersHorizontalIcon,
     category: "Security",
-    requires: ["admin"],
     tags: ["Security", "Admin", "Users", "GRC", "Risk Teams", "Audit Teams"],
     hasWebApp: true,
     keywords: [
@@ -1206,7 +1191,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/infra/github/connection",
     icon: ServerIcon,
     category: "Digital Operations",
-    requires: ["admin"],
     tags: ["Infra", "GitHub", "Access", "Organization"],
     hasWebApp: true,
     keywords: [
@@ -1228,7 +1212,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/infra/github/repository-requests",
     icon: ServerIcon,
     category: "Digital Operations",
-    requires: ["admin"],
     tags: ["Repositories", "Infra", "GitHub", "Permissions", "Access"],
     hasWebApp: true,
     keywords: [
@@ -1247,7 +1230,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/infra/github/review-repository-requests",
     icon: ServerIcon,
     category: "Digital Operations",
-    requires: ["admin"],
     tags: ["Infra", "Reviews", "Approvals", "GitHub", "Permissions"],
     hasWebApp: true,
     keywords: [
@@ -1266,7 +1248,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     href: "/infra/admin/github-settings",
     icon: SettingsIcon,
     category: "Digital Operations",
-    requires: ["admin"],
     tags: ["Infrastructure", "GitHub", "Settings", "Admin", "Organizations"],
     hasWebApp: true,
     keywords: [
@@ -1370,7 +1351,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     icon: ShoppingBagIcon,
     category: "Swag Store",
     previewFlag: "swagStore",
-    requires: ["admin"],
     tags: ["Admin", "Inventory", "Catalog", "Swag Admin", "Operations"],
     hasWebApp: true,
     keywords: [

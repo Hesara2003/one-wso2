@@ -44,32 +44,30 @@ export type ParLeadStatus = "PENDING" | "DRAFT" | "SHARED";
 export type ParF2fStatus = "PENDING" | "SCHEDULED" | "COMPLETED";
 export type ParEmployeeAcceptanceStatus = "PENDING" | "ACCEPTED" | "REJECTED";
 
-// The admin-configured question/rating-scale text for a cycle. Mirrors
-// par-app backend's ParCycleConfigurations — only the employee-facing
-// question is rendered today; the 360 question and the rating scales are
-// unused until those screens land.
+// A cycle's configurations, or the global ones new cycles start from. Mirrors
+// ParCycleConfigurations in the backend configured by ONE_WSO2_PAR_BACKEND_URL.
+// The two questions and the 360 rating list are only for cycles without the
+// PAR 2.0 forms.
 export interface ParCycleConfigurations {
   employeeParQuestion: string;
   threeSixtyReviewQuestion: string;
   parRatings: string[];
   threeSixtyReviewRatings: string[];
-  // Not on the wire yet — the backend's ParCycleConfigurations is a closed
-  // record with no such fields, so these are always undefined today. Typed
-  // ahead of a planned backend change so ParLeadReviewPanel.tsx's fallback
-  // chain (cycle config → apiConfig.ts's window.config value → hardcoded
-  // default) picks them up automatically once the backend ships them,
-  // with no frontend change needed at that point. Never send these back on
-  // a PUT until the backend actually accepts them — a closed record 400s on
-  // an unrecognized field.
-  top5p20pEnabledRating?: string;
-  evidenceEnabledRating?: string;
-  // Which entry in parRatings is auto-assigned to an employee/lead who
-  // misses their PAR deadline, set per cycle.
-  missedDeadlineRating?: string;
-  // Which entries in parRatings a leadership employee may be given, set per
-  // cycle. Falls back to LEADERSHIP_ALLOWED_RATINGS (util/parLeadership.ts)
-  // when the cycle hasn't configured it.
+  // The rating lists and the rules that depend on them. The backend sends
+  // every one with each cycle and the global configurations; one from before
+  // it did may leave them out (see ratingRulesFor in util/parLeadership.ts).
+  // The ratings anyone outside the leadership team can be given.
+  employeeRatings?: string[];
+  // The ratings the leadership team can be given.
   leadershipAllowedRatings?: string[];
+  // The rating that unlocks Top 5%/20% (an employee rating).
+  top5p20pEnabledRating?: string;
+  // The rating that needs evidence before it's shared.
+  evidenceEnabledRating?: string;
+  // The rating given for a missed deadline (an employee rating).
+  missedDeadlineRating?: string;
+  // The same for the leadership team (a leadership team rating).
+  leadershipMissedDeadlineRating?: string;
 }
 
 export interface ParCycle {
@@ -185,16 +183,11 @@ export interface Par360Reviewer {
   isEmployeeRequested: boolean;
   // PAR 2.0 cycles only.
   reviewerName?: string;
-  // How they work with the employee, as whoever asked said (PAR 2.0 cycles only).
-  relationship?: string;
 }
 
 // Body for POST .../employees/{email}/reviewers.
 export interface Par360ReviewRequestCreate {
   reviewerEmails: string[];
-  // How each reviewer works with the employee, by email. Required in PAR 2.0 cycles, except for a
-  // member of the leadership team.
-  relationships?: Record<string, string>;
 }
 
 // One request FOR you to review someone else. GET .../employees/{email}/review-requests
@@ -203,8 +196,8 @@ export interface Par360ReviewRequestCreate {
 export interface Par360ReviewRequest {
   employeeEmail: string;
   reviewStatus: Par360ReviewStatus;
-  isEmployeeRequested: boolean;
-  isLeadRequested: boolean;
+  // Asked (by the employee or their lead; the reviewer isn't told which), rather than offered.
+  isRequested: boolean;
   // PAR 2.0 cycles only.
   employeeName?: string;
 }
@@ -446,40 +439,6 @@ export interface ParSpecialRatingAllocation {
   parTop20Quota: number;
 }
 
-// ---- F2F scheduling ----------------------------------------------------------
-//
-// Mirrors the backend's raw Google Calendar freebusy shape (gcalendar:
-// FreeBusyResponse) and its own ScheduleMeetingRequest.
-
-export interface ParCalendarBusySlot {
-  start: string;
-  end: string;
-}
-
-export interface ParCalendarBusy {
-  busy: ParCalendarBusySlot[];
-}
-
-// GET .../calendar/busy-times?date=YYYY-MM-DD.
-export interface ParFreeBusyResponse {
-  calendars: Record<string, ParCalendarBusy>;
-  kind: string;
-  timeMax: string;
-  timeMin: string;
-}
-
-// Body for POST .../calendar/schedule-f2f. The response is a bare 201 with
-// no payload (the backend returns `http:CREATED` and nothing else) — there
-// is no meetLink to read back from this call.
-export interface ParScheduleF2fRequest {
-  parRatingId: number;
-  title: string;
-  description: string;
-  startTime: string;
-  endTime: string;
-  date: string;
-}
-
 // ---- Admin Portal ----------------------------------------------------------
 //
 // Admin org-wide views reuse ParTeamSummary/ParParticipant above — same
@@ -496,7 +455,8 @@ export interface ParCycleCreate {
   parF2FDeadline: string;
   parEmployeeDeadline: string;
   parLeadDeadline: string;
-  parCycleConfigurations: ParCycleConfigurations;
+  // Anything left out is taken from the global configurations.
+  parCycleConfigurations: Partial<ParCycleConfigurations>;
   // PAR 2.0: the cycle uses the guided self-review and structured 360° forms.
   par2Forms?: boolean;
 }

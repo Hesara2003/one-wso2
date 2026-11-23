@@ -45,7 +45,7 @@ import { Delta, linkifyDelta } from "../util/parLinkify";
 // characters differently (an apostrophe), and Quill would replace its whole
 // contents on every keystroke, each time a fresh step to undo.
 const TOOLBAR = [["undo", "redo"], ["bold", "italic", "underline"], [{ list: "ordered" }, { list: "bullet" }], [{ indent: "-1" }, { indent: "+1" }], ["link"], ["clean"]];
-const FORMATS = ["bold", "italic", "underline", "list", "bullet", "indent", "link"];
+const FORMATS = ["bold", "italic", "underline", "list", "indent", "link"];
 
 // Quill has no undo or redo icon: arrows drawn like its own, so they take the
 // theme's colours.
@@ -317,9 +317,20 @@ export default function ParRichTextField({
         "& .ql-editor.ql-blank::before": { color: palette.text.primary, opacity: 0.6 },
         "& .ql-snow .ql-tooltip": { display: "none" },
         "& .ql-snow a": { color: palette.primary.main },
+        // Disabled: no toolbar, greyed text, so it plainly can't be edited.
+        ...(disabled && {
+          "& .ql-toolbar.ql-snow": { display: "none" },
+          "& .ql-editor": { color: palette.text.disabled, cursor: "not-allowed" },
+        }),
       }}
     >
-      <Box sx={{ border: `1px solid ${palette.divider}`, borderRadius: 1 }}>
+      <Box
+        sx={{
+          border: `1px solid ${palette.divider}`,
+          borderRadius: 1,
+          ...(disabled && { bgcolor: palette.action.disabledBackground }),
+        }}
+      >
         <ReactQuill
           ref={quillRef}
           theme="snow"

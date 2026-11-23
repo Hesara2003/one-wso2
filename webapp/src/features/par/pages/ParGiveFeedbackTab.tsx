@@ -228,9 +228,7 @@ export default function ParGiveFeedbackTab() {
                     key={`${item.kind}-${item.email}-${i}`}
                     name={item.name}
                     email={item.email}
-                    note={[feedbackSource(item), leaderByEmail.get(item.email.toLowerCase())?.jobRole]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    note={feedbackSource(item)}
                     kind={item.kind}
                   >
                     <ItemActions
@@ -277,7 +275,6 @@ export default function ParGiveFeedbackTab() {
           deadline={cycle.parThreeSixtyRatingDeadline}
           held={held}
           offered={giving?.kind === "PAR" ? Boolean(giving.offered) : isVoluntary(viewing!)}
-          relationship={giving?.kind === "PAR" ? giving.relationship : undefined}
         />
       )}
       {viewing?.kind === "LEADERSHIP" && viewing.given?.anonymous === false && openSurvey && (

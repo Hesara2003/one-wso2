@@ -19,14 +19,13 @@ import ErrorNotice from "@components/error-notice/ErrorNotice";
 import { useMeProfile } from "@features/my/api/useMeProfile";
 import { useActiveParCycle } from "../api/useParData";
 import { useParSpecialRatingAllocations } from "../api/useSpecialRatingAllocation";
-import ParAllocationGroupsList from "../components/ParAllocationGroupsList";
-import ParEmptyState from "../components/ParEmptyState";
+import ParEmptyState from "./ParEmptyState";
+import ParLeadQuotaGroups from "./ParLeadQuotaGroups";
 
-// People Ops → Performance → Lead Portal → Top 5%/20% Allocation, lead view
-// (the admin view, which omits leadEmail to see every quota group, is
-// ParOrgQuotaAllocationsTab.tsx instead — both share ParAllocationGroupsList,
-// differing only in which hook fetches `rows`).
-export default function ParLeadAllocationTab() {
+// The lead's Top 5%/20% quotas, opened from the Lead View header: each quota
+// and its teams (the admin view, which omits leadEmail to see every quota
+// group, is ParOrgQuotaAllocationsTab.tsx instead, with ParAllocationGroupsList).
+export default function ParLeadQuotas() {
   const profile = useMeProfile();
   const workEmail = profile.data?.userInfo.workEmail;
   const activeCycles = useActiveParCycle(workEmail);
@@ -67,9 +66,9 @@ export default function ParLeadAllocationTab() {
   const rows = allocations.data ?? [];
   if (rows.length === 0) {
     return (
-      <ParEmptyState text="No special rating allocations found. Please ensure you have the necessary permissions to view this data." />
+      <ParEmptyState text="No Top 5%/20% quota is allocated to you in this cycle." />
     );
   }
 
-  return <ParAllocationGroupsList rows={rows} />;
+  return <ParLeadQuotaGroups rows={rows} />;
 }
