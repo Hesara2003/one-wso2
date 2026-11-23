@@ -35,6 +35,7 @@ import {
   FileSignatureIcon,
   HouseIcon,
   LandmarkIcon,
+  HeartHandshakeIcon,
   LifeBuoyIcon,
   LightbulbIcon,
   LayoutDashboard,
@@ -537,7 +538,6 @@ const ME_SECTIONS: PerspectiveSection[] = [
   // Procurement: raising a purchase request is something any employee does.
   // With the flag off the group doesn't exist.
   ...(isPreviewEnabled("procurement") ? appsToSections(PROCUREMENT_APPS) : []),
-  ...otherAppsSections("me"),
 ];
 
 // Amplify — employees share official WSO2 LinkedIn posts and earn points;
@@ -888,6 +888,18 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
     access: isCsmConfigured(),
     externalUrl: csmUrl || undefined,
   },
+  // Customer Success — the CS team's own sites, which live outside One WSO2.
+  // Every row is a link that opens in a new tab, so the landing lists them
+  // rather than forwarding (it has nothing in-app to forward to). Offered only
+  // once at least one of its sites has an address.
+  {
+    key: "customer-success",
+    label: "Customer Success",
+    icon: HeartHandshakeIcon,
+    access: otherAppsSections("customer-success").length > 0,
+    path: "/customer-success",
+    sections: otherAppsSections("customer-success"),
+  },
   // Sales — auto-recorded meetings. One screen so far: the meeting history
   // ported from meet-app. Create Meeting stayed behind (scheduling happens in
   // the calendar add-on) and the analytics dashboard was out of scope.
@@ -930,7 +942,7 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
     access: true,
     path: "/knowledge",
     forwardsToFirstItem: true,
-    sections: [...KNOWLEDGE_SECTIONS, ...otherAppsSections("knowledge")],
+    sections: KNOWLEDGE_SECTIONS,
   },
   // Amplify, held behind its preview flag until the phase 1 pilot. Its landing
   // forwards to Celebrate, the first row everyone can see.
@@ -984,8 +996,11 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
     ],
   },
   {
+    // The key and path stay "infra" while the label is "Digital Operations",
+    // for the same reason as Security's: the key threads through the route
+    // prefix, every item id, the gate and the colour.
     key: "infra",
-    label: "Infrastructure",
+    label: "Digital Operations",
     icon: ServerIcon,
     access: true,
     path: "/infra",
