@@ -44,7 +44,7 @@ describe("otherAppDirectoryEntries", () => {
       title: "Travel",
       label: "Open Travel",
       href: "https://travel.example",
-      category: "Me",
+      category: "Finance",
       isExternal: true,
       hasWebApp: true,
       hint: "The Travel App. Opens in a new tab.",
