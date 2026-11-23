@@ -92,6 +92,8 @@ export const APP_MARK_TONES: Record<string, AppMarkTones> = {
   // Procurement. Same rule — field 50% toward white, detail at 82%, from its
   // stopgap hue in perspectiveHues.ts.
   procurement: { field: "#BDB6F1", lead: "#7B6DE3", detail: "#6559BA" },
+  // Field is the hue halfway to white, detail the hue 18% darker.
+  "customer-success": { field: "#E2BCA8", lead: "#C47A50", detail: "#A16442" },
   // Amplify has no tones: its tile shows the product's own logo, which brings
   // its own colours (BRAND_MARKS in appMarkRegistry.ts).
 };
