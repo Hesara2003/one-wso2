@@ -345,3 +345,21 @@ export function KnowledgeMark({ size }: MarkProps) {
     </Svg>
   );
 }
+
+/**
+ * Customer Success — a speech bubble with a heart: looking after the customer.
+ * The bubble in `field`, the heart in `lead`, the bubble's tail in `detail`.
+ */
+export function CustomerSuccessMark({ size }: MarkProps) {
+  const t = appMarkTones("customer-success")!;
+  return (
+    <Svg size={size}>
+      <rect x="5" y="6" width="38" height="29" rx="8" fill={t.field} />
+      <path d="M12 33v9l10-7z" fill={t.detail} />
+      <path
+        d="M24 29.5c-.6 0-1.2-.2-1.7-.6C17 24.9 14 22.1 14 18.7 14 15.8 16.2 13.5 19 13.5c1.9 0 3.6 1 5 2.6 1.4-1.6 3.1-2.6 5-2.6 2.8 0 5 2.3 5 5.2 0 3.4-3 6.2-8.3 10.2-.5.4-1.1.6-1.7.6z"
+        fill={t.lead}
+      />
+    </Svg>
+  );
+}
