@@ -16,7 +16,6 @@
 
 import { otherAppUrls } from "@config/apiConfig";
 import {
-  AppWindowIcon,
   BookUserIcon,
   CalendarRangeIcon,
   ChartLineIcon,
@@ -30,7 +29,6 @@ import {
   GitBranchIcon,
   GlobeIcon,
   HammerIcon,
-  HeadsetIcon,
   KeyRoundIcon,
   LandmarkIcon,
   PackageIcon,
@@ -38,7 +36,6 @@ import {
   PlaneIcon,
   PlugIcon,
   PrinterIcon,
-  QrCodeIcon,
   ReceiptTextIcon,
   ServerCogIcon,
   StoreIcon,
@@ -49,16 +46,31 @@ import {
 } from "@wso2/oxygen-ui-icons-react";
 import type { PerspectiveSection } from "@constants/perspectives";
 
-/** The perspectives whose rail ends with an "Other apps" group. */
+/**
+ * The perspectives that link to other apps. Customer Success holds nothing but
+ * these links. "infra" is the Digital Operations perspective (its key predates
+ * the name).
+ */
 export type OtherAppPerspective =
   | "people"
   | "finance"
   | "sales"
-  | "knowledge"
   | "engineering"
-  | "infra"
   | "security"
-  | "me";
+  | "infra"
+  | "customer-success";
+
+/** A rail group that holds related linked apps within a perspective. */
+export type OtherAppGroupId = "source-code" | "builds-artifacts" | "product-sites" | "network-vpn" | "requests";
+
+/** The rail groups, in the order they appear in a perspective's rail. */
+export const OTHER_APP_GROUPS: readonly { id: OtherAppGroupId; label: string; icon: LucideIcon }[] = [
+  { id: "source-code", label: "Source Code", icon: GitBranchIcon },
+  { id: "builds-artifacts", label: "Builds & Artifacts", icon: HammerIcon },
+  { id: "product-sites", label: "Product Sites", icon: GlobeIcon },
+  { id: "network-vpn", label: "Network & VPN", icon: WifiIcon },
+  { id: "requests", label: "Requests", icon: ClipboardListIcon },
+];
 
 /** A WSO2 tool One WSO2 links to but does not host. */
 export interface OtherApp {
@@ -76,14 +88,16 @@ export interface OtherApp {
   /** Reachable only on the WSO2 VPN; the rail and the search result say so. */
   vpnOnly?: boolean;
   /**
+   * The rail group of related apps it sits in. Without one, it is an item of
+   * its own in the perspective's rail.
+   */
+  group?: OtherAppGroupId;
+  /**
    * Linked from a group the rail already has for this app (see `otherAppRow`),
-   * so it is left out of the "Other apps" group.
+   * so `otherAppsSections` leaves it out.
    */
   inOwnGroup?: boolean;
 }
-
-/** Label of the rail group that holds a perspective's other apps. */
-export const OTHER_APPS_GROUP_LABEL = "Other apps";
 
 /** Text appended to the label of an app reachable only on the VPN. */
 export const VPN_ONLY_SUFFIX = " (VPN)";
@@ -93,11 +107,10 @@ export const OTHER_APP_CATEGORY: Readonly<Record<OtherAppPerspective, string>> =
   people: "People Ops",
   finance: "Finance",
   sales: "Sales",
-  knowledge: "Knowledge",
   engineering: "Engineering",
-  infra: "Infrastructure",
   security: "Security",
-  me: "Me",
+  infra: "Digital Operations",
+  "customer-success": "Customer Success",
 };
 
 /** Every linked app, in rail order within each perspective. */
@@ -113,6 +126,15 @@ export const OTHER_APPS: readonly OtherApp[] = [
   },
 
   {
+    id: "netsuite",
+    label: "NetSuite",
+    marketplaceName: "NetSuite",
+    hint: "The finance system",
+    keywords: ["netsuite", "erp"],
+    perspective: "finance",
+    icon: LandmarkIcon,
+  },
+  {
     id: "allocations",
     label: "Allocations",
     marketplaceName: "Allocations App",
@@ -122,13 +144,22 @@ export const OTHER_APPS: readonly OtherApp[] = [
     icon: CalendarRangeIcon,
   },
   {
-    id: "netsuite",
-    label: "NetSuite",
-    marketplaceName: "NetSuite",
-    hint: "The finance system",
-    keywords: ["netsuite", "erp"],
+    id: "travel",
+    label: "Travel",
+    marketplaceName: "Travel App",
+    hint: "The Travel App",
+    keywords: ["travel", "trip", "travel request"],
     perspective: "finance",
-    icon: LandmarkIcon,
+    icon: PlaneIcon,
+  },
+  {
+    id: "msl-payslip",
+    label: "MSL Payslip Viewer",
+    marketplaceName: "MSL Payslip Viewer",
+    hint: "Your payslips, from the payroll provider",
+    keywords: ["payslip", "salary slip", "pay slip", "payroll"],
+    perspective: "finance",
+    icon: ReceiptTextIcon,
   },
 
   {
@@ -166,7 +197,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     marketplaceName: "ExploreCS - Internal CS Site",
     hint: "The internal Customer Success site",
     keywords: ["explorecs", "explore cs", "cs site"],
-    perspective: "knowledge",
+    perspective: "customer-success",
     icon: CompassIcon,
   },
   {
@@ -175,7 +206,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     marketplaceName: "CS Tools",
     hint: "The Customer Success tools site",
     keywords: ["cs tools", "customer success tools"],
-    perspective: "knowledge",
+    perspective: "customer-success",
     icon: WrenchIcon,
   },
   {
@@ -184,7 +215,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     marketplaceName: "CS Tooling Development Site",
     hint: "The CS tooling team's site",
     keywords: ["cs tooling", "tooling site"],
-    perspective: "knowledge",
+    perspective: "customer-success",
     icon: CodeIcon,
   },
   {
@@ -193,7 +224,8 @@ export const OTHER_APPS: readonly OtherApp[] = [
     marketplaceName: "Solutions Architecture Site",
     hint: "The Solutions Architecture team's site",
     keywords: ["solutions architecture", "sa site", "solution architects"],
-    perspective: "knowledge",
+    perspective: "engineering",
+    group: "product-sites",
     icon: DraftingCompassIcon,
   },
 
@@ -204,6 +236,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "The WSO2 GitHub organisation",
     keywords: ["github", "wso2 github", "repositories"],
     perspective: "engineering",
+    group: "source-code",
     icon: GitBranchIcon,
   },
   {
@@ -213,6 +246,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "The WSO2 Support GitHub organisation",
     keywords: ["support github", "support repositories"],
     perspective: "engineering",
+    group: "source-code",
     icon: GitBranchIcon,
   },
   {
@@ -222,6 +256,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "WSO2's Maven artifact repository",
     keywords: ["nexus", "maven", "artifacts"],
     perspective: "engineering",
+    group: "builds-artifacts",
     icon: PackageIcon,
   },
   {
@@ -231,6 +266,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "The public build server",
     keywords: ["jenkins", "public jenkins", "builds"],
     perspective: "engineering",
+    group: "builds-artifacts",
     icon: HammerIcon,
     vpnOnly: true,
   },
@@ -241,17 +277,9 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "The Support build server",
     keywords: ["jenkins", "support jenkins"],
     perspective: "engineering",
+    group: "builds-artifacts",
     icon: HammerIcon,
     vpnOnly: true,
-  },
-  {
-    id: "github-committership-form",
-    label: "GitHub Committership Request",
-    marketplaceName: "GitHub Committership Request Form",
-    hint: "Request committer access to a WSO2 GitHub repository",
-    keywords: ["committership", "committer", "commit access"],
-    perspective: "engineering",
-    icon: ClipboardListIcon,
   },
   {
     id: "connector-store-docs",
@@ -260,6 +288,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "Documentation for the Connector Store",
     keywords: ["connector store", "connectors"],
     perspective: "engineering",
+    group: "product-sites",
     icon: PlugIcon,
   },
   {
@@ -269,16 +298,8 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "The API Manager team's site",
     keywords: ["apim", "api manager"],
     perspective: "engineering",
+    group: "product-sites",
     icon: GlobeIcon,
-  },
-  {
-    id: "support-portal-lite",
-    label: "Support Portal Lite",
-    marketplaceName: "Support Portal Lite",
-    hint: "The Support Portal Lite app",
-    keywords: ["support portal lite", "spl"],
-    perspective: "engineering",
-    icon: HeadsetIcon,
   },
 
   {
@@ -288,16 +309,8 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "How to set up the WSO2 VPN",
     keywords: ["vpn", "vpn setup"],
     perspective: "infra",
+    group: "network-vpn",
     icon: KeyRoundIcon,
-  },
-  {
-    id: "vpn-qr-code",
-    label: "My VPN QR Code",
-    marketplaceName: "My VPN QR Code",
-    hint: "Your VPN QR code",
-    keywords: ["vpn qr", "vpn code"],
-    perspective: "infra",
-    icon: QrCodeIcon,
   },
   {
     id: "guest-wifi",
@@ -306,6 +319,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "The Guest WiFi app",
     keywords: ["wifi", "guest wifi", "wi-fi"],
     perspective: "infra",
+    group: "network-vpn",
     icon: WifiIcon,
     vpnOnly: true,
   },
@@ -316,6 +330,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "How to set up the office printers",
     keywords: ["printer", "printing"],
     perspective: "infra",
+    group: "network-vpn",
     icon: PrinterIcon,
   },
   {
@@ -325,6 +340,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "The DIY Infra Portal",
     keywords: ["diy infra", "self-service infra"],
     perspective: "infra",
+    group: "requests",
     icon: ServerCogIcon,
     vpnOnly: true,
   },
@@ -335,6 +351,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
     hint: "Ask for approval to use new software",
     keywords: ["software approval", "new software", "software request"],
     perspective: "infra",
+    group: "requests",
     icon: PackagePlusIcon,
   },
 
@@ -361,60 +378,38 @@ export const OTHER_APPS: readonly OtherApp[] = [
   },
 
   {
-    id: "travel",
-    label: "Travel",
-    marketplaceName: "Travel App",
-    hint: "The Travel App",
-    keywords: ["travel", "trip", "travel request"],
-    perspective: "me",
-    icon: PlaneIcon,
-  },
-  {
-    id: "msl-payslip",
-    label: "MSL Payslip Viewer",
-    marketplaceName: "MSL Payslip Viewer",
-    hint: "Your payslips, from the payroll provider",
-    keywords: ["payslip", "salary slip", "pay slip", "payroll"],
-    perspective: "me",
-    icon: ReceiptTextIcon,
-  },
-  {
     id: "hr-site",
     label: "HR Site",
     marketplaceName: "HR Site",
     hint: "The HR team's site",
     keywords: ["hr", "human resources", "hr policies"],
-    perspective: "me",
+    perspective: "people",
     icon: BookUserIcon,
   },
 ];
 
 /**
- * The "Other apps" rail group for a perspective: one row per linked app that has
- * an address, each opening it in a new tab.
+ * A perspective's linked apps, for the end of its rail. Apps that share a group
+ * (`OTHER_APP_GROUPS`, in that order) sit inside it, each opening in a new tab;
+ * every other app is an item of its own, a link that leaves One WSO2. Only apps
+ * with an address are listed, so a group or item with none is left out.
  *
  * @param perspective - The perspective whose apps to list.
  * @param urls - App id → address; defaults to `ONE_WSO2_OTHER_APP_URLS`.
- * @returns The group as the only element, or no elements when none of the
- *   perspective's apps has an address.
+ * @returns The groups, then the items of their own.
  */
 export function otherAppsSections(
   perspective: OtherAppPerspective,
   urls: Readonly<Record<string, string>> = otherAppUrls,
 ): PerspectiveSection[] {
-  const rows = OTHER_APPS.filter((app) => app.perspective === perspective && !app.inOwnGroup).flatMap((app) =>
-    rowFor(app, urls),
-  );
-  if (rows.length === 0) return [];
-  return [
-    {
-      id: `${perspective}-other-apps`,
-      label: OTHER_APPS_GROUP_LABEL,
-      icon: AppWindowIcon,
-      alwaysGroup: true,
-      children: rows,
-    },
-  ];
+  const apps = OTHER_APPS.filter((app) => app.perspective === perspective && !app.inOwnGroup);
+  const groups = OTHER_APP_GROUPS.flatMap((group): PerspectiveSection[] => {
+    const rows = apps.filter((app) => app.group === group.id).flatMap((app) => rowFor(app, urls));
+    if (rows.length === 0) return [];
+    return [{ id: `${perspective}-${group.id}`, label: group.label, icon: group.icon, alwaysGroup: true, children: rows }];
+  });
+  const items = apps.filter((app) => !app.group).flatMap((app) => itemFor(app, urls));
+  return [...groups, ...items];
 }
 
 /**
@@ -432,14 +427,26 @@ export function otherAppRow(
   return app ? rowFor(app, urls) : [];
 }
 
-/** The row that opens `app` in a new tab, or none when it has no address. */
+/** An app's own rail item, a link to it, or none when it has no address. */
+function itemFor(app: OtherApp, urls: Readonly<Record<string, string>>): PerspectiveSection[] {
+  const url = urls[app.id] ?? "";
+  if (!url) return [];
+  return [{ id: `other-app-${app.id}`, label: railLabel(app), icon: app.icon, externalUrl: url }];
+}
+
+/** The label an app shows in the rail: its name, and " (VPN)" when only the VPN reaches it. */
+function railLabel(app: OtherApp): string {
+  return app.vpnOnly ? `${app.label}${VPN_ONLY_SUFFIX}` : app.label;
+}
+
+/** The row in a group that opens `app` in a new tab, or none when it has no address. */
 function rowFor(app: OtherApp, urls: Readonly<Record<string, string>>): PerspectiveSection[] {
   const url = urls[app.id] ?? "";
   if (!url) return [];
   return [
     {
       id: `other-app-${app.id}`,
-      label: app.vpnOnly ? `${app.label}${VPN_ONLY_SUFFIX}` : app.label,
+      label: railLabel(app),
       icon: app.icon,
       onSelect: () => {
         window.open(url, "_blank", "noopener,noreferrer");
