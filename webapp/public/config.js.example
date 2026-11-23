@@ -186,30 +186,30 @@ window.config = {
 
   // Addresses of WSO2 tools One WSO2 links to but does not host, keyed by app
   // id (src/constants/otherApps.ts). Each one with an http(s) address gets a
-  // row, opened in a new tab, in an "Other apps" group at the end of its
-  // perspective's rail (Sales Pitstop's row goes in the Sales Pitstop group),
-  // and an Ask Novera search result found by its App Marketplace name.
-  // An app left out, or the whole key left out, shows nothing.
+  // place in its perspective's rail: inside its group where it has one (e.g.
+  // Engineering's Source Code), else an item of its own, either way opening in
+  // a new tab. Sales Pitstop goes in the Sales Pitstop group. Each also gets an
+  // Ask Novera search result found by its App Marketplace name. Customer
+  // Success holds only these links, and is offered once one of its apps has an
+  // address. An app left out shows nothing.
   // ONE_WSO2_OTHER_APP_URLS: {
   //   // People Ops
-  //   "people-app": "<url>",
+  //   "people-app": "<url>", "hr-site": "<url>",
   //   // Finance
-  //   allocations: "<url>", netsuite: "<url>",
+  //   allocations: "<url>", netsuite: "<url>", "msl-payslip": "<url>", travel: "<url>",
   //   // Sales
   //   salesforce: "<url>", "sales-pitstop": "<url>", "sales-insights-dashboard": "<url>",
-  //   // Knowledge
-  //   explorecs: "<url>", "cs-tools": "<url>", "cs-tooling-site": "<url>", "sa-site": "<url>",
+  //   // Customer Success
+  //   explorecs: "<url>", "cs-tools": "<url>", "cs-tooling-site": "<url>",
   //   // Engineering
   //   "wso2-github": "<url>", "support-github": "<url>", nexus: "<url>",
-  //   "public-jenkins": "<url>", "support-jenkins": "<url>", "github-committership-form": "<url>",
-  //   "connector-store-docs": "<url>", "apim-site": "<url>", "support-portal-lite": "<url>",
-  //   // Infrastructure
-  //   "vpn-setup-guide": "<url>", "vpn-qr-code": "<url>", "guest-wifi": "<url>",
-  //   "network-printer-guide": "<url>", "diy-infra-portal": "<url>", "new-software-request": "<url>",
+  //   "public-jenkins": "<url>", "support-jenkins": "<url>",
+  //   "connector-store-docs": "<url>", "apim-site": "<url>", "sa-site": "<url>",
+  //   // Digital Operations
+  //   "vpn-setup-guide": "<url>", "guest-wifi": "<url>", "network-printer-guide": "<url>",
+  //   "diy-infra-portal": "<url>", "new-software-request": "<url>",
   //   // Security and Compliance
   //   "security-compliance-site": "<url>", "security-self-service-dashboard": "<url>",
-  //   // Me
-  //   travel: "<url>", "msl-payslip": "<url>", "hr-site": "<url>",
   // },
 
   // Infra Portal backend. Privileges come from this backend's own /user-info
