@@ -119,6 +119,8 @@ describe("otherAppsSections", () => {
     row?.onSelect?.({ queryClient: new QueryClient() });
 
     expect(row?.opensInNewTab).toBe(true);
+    // Its address too, so a landing can list it as a real link.
+    expect(row?.outboundUrl).toBe("https://nexus.example");
     expect(open).toHaveBeenCalledWith("https://nexus.example", "_blank", "noopener,noreferrer");
   });
 
