@@ -135,7 +135,7 @@ describe("otherAppsSections", () => {
 describe("otherAppRow", () => {
   it("is the app's row when it has an address", () => {
     expect(otherAppRow("sales-pitstop", { "sales-pitstop": "https://pitstop.example" })).toMatchObject([
-      { id: "other-app-sales-pitstop", label: "Open Sales Pitstop", opensInNewTab: true },
+      { id: "other-app-sales-pitstop", label: "Sales Pitstop App", opensInNewTab: true },
     ]);
   });
 
