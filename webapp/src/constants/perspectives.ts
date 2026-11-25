@@ -138,6 +138,11 @@ export interface PerspectiveSection {
   // with the arrow the launcher puts on tiles that leave One WSO2. Only read on
   // a group's children: a top-level row, or a `path` row, ignores it.
   opensInNewTab?: boolean;
+  // The address an `opensInNewTab` row's action opens, when it is known ahead
+  // of time (a linked app's configured address). Lets a place that lists the
+  // row, such as an empty perspective landing, draw a real link instead of a
+  // button. Absent for a row whose destination is only known at runtime.
+  outboundUrl?: string;
   // A nested row whose label may wrap onto two lines — see MenuApp.wrapLabels.
   wrapLabel?: boolean;
 }
