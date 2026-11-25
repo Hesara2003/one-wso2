@@ -194,6 +194,36 @@ describe("a perspective landing that forwards to the first item", () => {
     expect(retry).toHaveBeenCalled();
   });
 
+  // A failed check is about this app's own screens; the rail still shows its
+  // links to other apps, so the error page offers them too, beside Retry.
+  it("keeps the rail's links to other apps beside a failed check", async () => {
+    const retry = vi.fn();
+    visibility.current = {
+      ...visibility.current,
+      isError: true,
+      error: new Error("boom"),
+      retry,
+      visibleOutbound: [{ id: "other-app-wifi", label: "Guest WiFi", externalUrl: "https://wifi.example" }],
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={["/security"]}>
+          <Routes>
+            <Route path="/security" element={<PerspectiveLanding />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText(/Couldn't work out what you can open/)).toBeInTheDocument();
+    expect(within(screen.getByRole("list")).getByRole("link", { name: /Guest WiFi/ })).toHaveAttribute(
+      "href",
+      "https://wifi.example",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalled();
+  });
+
   // The rail can show links to other apps (they never become a landing's
   // destination). The card offers them instead of saying nothing is open.
   it("offers the rail's links to other apps instead of saying nothing is open", async () => {
