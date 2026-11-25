@@ -1200,9 +1200,6 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
       "github connection",
       "infra portal",
       "github account",
-      // App Marketplace name
-      "github - repo creation request",
-      "repo creation request",
     ],
   },
   {
@@ -1221,6 +1218,9 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
       "github access",
       "repo permissions",
       "infra requests",
+      // App Marketplace name: a repository creation request is filed here.
+      "github - repo creation request",
+      "repo creation request",
     ],
   },
   {
