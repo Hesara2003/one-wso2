@@ -16,6 +16,7 @@
 
 // The Engagement App Backend's wire shapes, as finance-tools apps/engagement-app/backend/openapi.yaml (0.2.0) defines them.
 
+import type { WAccountManager, WEngagementManager, WMarketingEvents, WTravelTeam, WTripVisa, WWidgetRef } from "./dashboardWire";
 import type {
   ClearanceStatus,
   EngagementKind,
@@ -45,6 +46,8 @@ export interface WUserInfo {
     perDiemPayments: ("push" | "all")[];
     netsuiteSyncFailures: boolean;
   };
+  /** Where to ask for access (ACCESS_REQUEST_EMAIL); absent when not set. */
+  accessRequestEmail?: string;
 }
 
 export interface WPage<T> {
@@ -190,6 +193,7 @@ export interface WAllocationSummary {
   endDate: string;
   clearanceStatus?: ClearanceStatus | null;
   current?: boolean;
+  canOpen?: boolean;
 }
 
 export interface WCountCard {
@@ -201,14 +205,15 @@ export interface WCountCard {
 }
 
 export interface WDashboard {
+  /** The business date (UTC) the dashboard is for. */
+  date?: string;
   failedSections?: string[];
-  myWork?: {
-    currentAllocation?: WAllocationSummary | null;
-    nextAllocation?: WAllocationSummary | null;
-    todayTeamAllocation?: WTimelineItem | null;
-    nextTrips?: WDashboardTrip[];
-    upcomingTripCount?: number;
-  };
+  /** Every widget the caller may see, in catalogue order. */
+  widgets?: WWidgetRef[];
+  travelTeam?: WTravelTeam;
+  engagementManager?: WEngagementManager;
+  accountManager?: WAccountManager;
+  marketingEvents?: WMarketingEvents;
   waitingOnYou?: WCountCard[];
   travel?: {
     inProgress: number;
@@ -220,16 +225,6 @@ export interface WDashboard {
     topDestinations: WBucket[];
     byMonth: WSeriesPoint[];
     byAgency: WBucket[];
-  };
-  travelCost?: {
-    total: number;
-    travelInvoices: number;
-    perDiems: number;
-    creditCardExpenses?: number | null;
-    lastMonth?: number;
-    currentMonth?: number;
-    byMonth: WSeriesPoint[];
-    byType: WBucket[];
   };
   engagements?: {
     startingIn30Days: {
@@ -259,15 +254,6 @@ export interface WDashboard {
     upcomingTotal?: number;
     invoicesByStatus: WBucket[];
     tripsByMonth: WSeriesPoint[];
-    perDiemsOnOpenTrips: {
-      jobNumber: string;
-      traveller: WPerson;
-      startDate?: string | null;
-      endDate?: string | null;
-      days?: number | null;
-      currency?: string | null;
-      total?: number | null;
-    }[];
   };
 }
 
@@ -286,6 +272,8 @@ export interface WAllocationsToday {
 export interface WMyOverview {
   upcomingAllocations: WAllocationSummary[];
   upcomingTrips: WDashboardTrip[];
+  /** Present for callers with own trips access: at most 20 trips. */
+  tripVisas?: WTripVisa[];
 }
 
 // ---------------------------------------------------------------- engagements
@@ -462,7 +450,7 @@ export interface WTravelRequestDetail extends WTravelRequestSummary {
   engagementType?: string | null;
   address?: string | null;
   fundingSources?: WFundingSource[] | null;
-  tabs: { perDiems?: boolean; invoices?: boolean; travelCards?: boolean; payments?: boolean };
+  tabs: { perDiems?: boolean; invoices?: boolean; travelCards?: boolean; payments?: boolean; expenses?: boolean };
 }
 
 export interface WPerDiem {
@@ -508,6 +496,35 @@ export interface WInvoice {
   addedOn?: string;
   addedBy?: string | null;
   actions?: { approvePo?: boolean; approve?: boolean; reject?: boolean; push?: boolean; resync?: boolean };
+}
+
+export interface WCardExpense {
+  id: number;
+  date?: string | null;
+  expenseType?: string | null;
+  reference?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  employeeEmail?: string | null;
+  status?: string | null;
+}
+
+export interface WExpenseClaim {
+  id: number;
+  claimNumber?: string | null;
+  date?: string | null;
+  expenseType?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  reimbursementAmount?: number | null;
+  reimbursementCurrency?: string | null;
+  employeeEmail?: string | null;
+  status?: string | null;
+}
+
+export interface WTripExpenses {
+  cardExpenses?: WCardExpense[] | null;
+  expenseClaims?: WExpenseClaim[] | null;
 }
 
 export interface WTravelCard {

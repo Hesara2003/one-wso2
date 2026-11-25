@@ -33,30 +33,8 @@ import {
 } from "@wso2/oxygen-ui";
 import { XIcon } from "@wso2/oxygen-ui-icons-react";
 import type { Choice, YesNo } from "../types";
+import { useFieldError } from "./fieldErrors";
 import { LONG_MAX, SHORT_MAX } from "./fieldLimits";
-
-export function FieldLabel({
-  children,
-  required,
-  htmlFor,
-  id,
-}: {
-  children: ReactNode;
-  required?: boolean;
-  htmlFor?: string;
-  id?: string;
-}) {
-  return (
-    <Typography component="label" htmlFor={htmlFor} id={id} variant="body2" sx={{ display: "block", fontWeight: 500, mb: 0.75 }}>
-      {children}
-      {required && (
-        <Box component="span" aria-hidden="true" sx={{ ml: 0.4 }}>
-          *
-        </Box>
-      )}
-    </Typography>
-  );
-}
 
 /** A small uppercase heading that starts a group of related fields. */
 export function SectionHeading({ children, first }: { children: ReactNode; first?: boolean }) {
@@ -71,33 +49,41 @@ export function SectionHeading({ children, first }: { children: ReactNode; first
 
 export function TextInput({
   label,
+  name = label,
   value,
   onChange,
   required,
   placeholder,
   type = "text",
+  min = 1,
+  maxLength,
   multiline,
   minRows,
   disabled,
 }: {
   label: string;
+  /** Tells the field apart in the step's messages; its label when not given. */
+  name?: string;
   value: string;
   onChange?: (value: string) => void;
   required?: boolean;
   placeholder?: string;
-  type?: "text" | "email" | "number";
+  type?: "text" | "email" | "number" | "date" | "url" | "tel";
+  /** The smallest number a number field takes. */
+  min?: number;
+  /** The most characters it takes, when the backend allows fewer than the usual cap. */
+  maxLength?: number;
   multiline?: boolean;
   minRows?: number;
   disabled?: boolean;
 }) {
-  const id = useId();
+  const error = useFieldError(name);
   return (
-    <Box sx={{ minWidth: 0 }}>
-      <FieldLabel htmlFor={id} required={required}>
-        {label}
-      </FieldLabel>
+    <Box sx={{ minWidth: 0 }} data-field-error={error ? "true" : undefined}>
       <TextField
-        id={id}
+        label={label}
+        error={Boolean(error)}
+        helperText={error}
         size="small"
         fullWidth
         required={required}
@@ -108,7 +94,10 @@ export function TextInput({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        slotProps={{ htmlInput: { maxLength: multiline ? LONG_MAX : SHORT_MAX, ...(type === "number" ? { min: 1 } : {}) } }}
+        slotProps={{
+          inputLabel: { shrink: true },
+          htmlInput: { maxLength: maxLength ?? (multiline ? LONG_MAX : SHORT_MAX), ...(type === "number" ? { min } : {}) },
+        }}
       />
     </Box>
   );
@@ -145,6 +134,7 @@ export function YesNoList({ children }: { children: ReactNode }) {
  */
 export function YesNoField({
   label,
+  name = label,
   value,
   onChange,
   disabled,
@@ -152,14 +142,18 @@ export function YesNoField({
   children,
 }: {
   label: string;
+  /** Tells the field apart in the step's messages; its label when not given. */
+  name?: string;
   value: YesNo | "";
   onChange: (value: YesNo) => void;
   disabled?: boolean;
   bare?: boolean;
   children?: ReactNode;
 }) {
+  const error = useFieldError(name);
+  const errorId = useId();
   return (
-    <Box sx={{ px: bare ? 0 : 2.25, py: bare ? 0 : 1.75 }}>
+    <Box sx={{ px: bare ? 0 : 2.25, py: bare ? 0 : 1.75 }} data-field-error={error ? "true" : undefined}>
       <Box
         sx={{
           display: "flex",
@@ -182,6 +176,8 @@ export function YesNoField({
           value={value || null}
           onChange={(_, next: YesNo | null) => next && onChange(next)}
           aria-label={label}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           sx={{
             flexShrink: 0,
             "& .MuiToggleButton-root": { textTransform: "none", fontWeight: 500, minWidth: 76, px: 2 },
@@ -196,6 +192,11 @@ export function YesNoField({
           <ToggleButton value="no">No</ToggleButton>
         </ToggleButtonGroup>
       </Box>
+      {error && (
+        <Typography id={errorId} role="alert" variant="caption" color="error" sx={{ display: "block", mt: 0.75 }}>
+          {error}
+        </Typography>
+      )}
       {value === "yes" && children && (
         <Stack
           spacing={2.5}
@@ -218,6 +219,7 @@ const SELECT_MAX = 10;
  */
 export function SelectField({
   label,
+  name = label,
   options,
   value,
   onChange,
@@ -227,6 +229,8 @@ export function SelectField({
   disabled,
 }: {
   label: string;
+  /** Tells the field apart in the step's messages; its label when not given. */
+  name?: string;
   options: readonly string[];
   value: string;
   onChange: (value: string) => void;
@@ -235,17 +239,17 @@ export function SelectField({
   labels?: Readonly<Record<string, string>>;
   disabled?: boolean;
 }) {
-  const labelId = useId();
+  const error = useFieldError(name);
   const textOf = (v: string): string => labels?.[v] ?? v;
   // A saved value that is no longer in the list stays selectable, so editing a request never blanks it.
   const items = value && !options.includes(value) ? [...options, value] : options;
   return (
-    <Box sx={{ minWidth: 0 }}>
-      <FieldLabel id={labelId} required={required}>
-        {label}
-      </FieldLabel>
+    <Box sx={{ minWidth: 0 }} data-field-error={error ? "true" : undefined}>
       <TextField
         select
+        label={label}
+        error={Boolean(error)}
+        helperText={error}
         required={required}
         size="small"
         fullWidth
@@ -253,9 +257,9 @@ export function SelectField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         slotProps={{
+          inputLabel: { shrink: true },
           select: {
             displayEmpty: true,
-            SelectDisplayProps: { "aria-labelledby": labelId },
             renderValue: (selected) =>
               selected ? (
                 textOf(String(selected))
@@ -294,8 +298,11 @@ export function OptionField({
   placeholder,
   emptyText,
   disabled,
+  name = label,
 }: {
   label: string;
+  /** Tells the field apart in the step's messages; its label when not given. */
+  name?: string;
   choices: readonly Choice[];
   value: string;
   onChange: (value: string) => void;
@@ -305,6 +312,7 @@ export function OptionField({
   disabled?: boolean;
 }) {
   const id = useId();
+  const error = useFieldError(name);
   // A saved value that is no longer in the list stays selectable, so editing a request never blanks it.
   const items: Choice[] = value && !choices.some((c) => c.value === value) ? [...choices, { value, label: value }] : [...choices];
   const prompt = items.length === 0 && emptyText ? emptyText : (placeholder ?? "Select");
@@ -313,6 +321,7 @@ export function OptionField({
       <SelectField
         required
         label={label}
+        name={name}
         options={items.map((c) => c.value)}
         labels={Object.fromEntries(items.map((c) => [c.value, c.label]))}
         value={value}
@@ -323,10 +332,7 @@ export function OptionField({
     );
   }
   return (
-    <Box sx={{ minWidth: 0 }}>
-      <FieldLabel htmlFor={id} required={required}>
-        {label}
-      </FieldLabel>
+    <Box sx={{ minWidth: 0 }} data-field-error={error ? "true" : undefined}>
       <Autocomplete
         id={id}
         forcePopupIcon
@@ -339,7 +345,17 @@ export function OptionField({
         onChange={(_, next) => onChange(next?.value ?? "")}
         disabled={disabled}
         noOptionsText={emptyText ?? "No options"}
-        renderInput={(params) => <TextField {...params} required={required} placeholder={prompt} />}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={label}
+            error={Boolean(error)}
+            helperText={error}
+            required={required}
+            placeholder={prompt}
+            slotProps={{ inputLabel: { ...params.InputLabelProps, shrink: true } }}
+          />
+        )}
       />
     </Box>
   );
@@ -348,6 +364,7 @@ export function OptionField({
 /** Several short entries in one field: type one and press Enter to add it as a chip. */
 export function ChipsField({
   label,
+  name = label,
   values,
   onChange,
   placeholder,
@@ -355,6 +372,8 @@ export function ChipsField({
   disabled,
 }: {
   label: string;
+  /** Tells the field apart in the step's messages; its label when not given. */
+  name?: string;
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
@@ -362,15 +381,13 @@ export function ChipsField({
   disabled?: boolean;
 }) {
   const id = useId();
+  const error = useFieldError(name);
   const clean = (entries: string[]): string[] =>
     entries
       .map((entry) => entry.trim())
       .filter((entry, index, all) => entry !== "" && all.findIndex((e) => e.toLowerCase() === entry.toLowerCase()) === index);
   return (
-    <Box sx={{ minWidth: 0 }}>
-      <FieldLabel htmlFor={id} required={required}>
-        {label}
-      </FieldLabel>
+    <Box sx={{ minWidth: 0 }} data-field-error={error ? "true" : undefined}>
       <Autocomplete
         clearIcon={<SmallClearIcon />}
         id={id}
@@ -385,8 +402,15 @@ export function ChipsField({
         renderInput={(params) => (
           <TextField
             {...params}
+            label={label}
+            error={Boolean(error)}
+            helperText={error}
+            required={required}
             placeholder={values.length ? "" : placeholder}
-            slotProps={{ htmlInput: { ...params.inputProps, maxLength: SHORT_MAX, "aria-required": required || undefined } }}
+            slotProps={{
+              inputLabel: { ...params.InputLabelProps, shrink: true },
+              htmlInput: { ...params.inputProps, maxLength: SHORT_MAX, "aria-required": required || undefined },
+            }}
           />
         )}
       />

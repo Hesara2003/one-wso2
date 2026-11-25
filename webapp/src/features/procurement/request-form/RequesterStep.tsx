@@ -20,7 +20,8 @@ import { PlusIcon } from "@wso2/oxygen-ui-icons-react";
 import { describeError } from "@api/errors";
 import { useDirectorySearch } from "../api/useProcurement";
 import type { Person, ProcurementMe } from "../types";
-import { FieldLabel, SmallClearIcon, StepTitle, TextInput } from "./formFields";
+import { useFieldError } from "./fieldErrors";
+import { SmallClearIcon, StepTitle, TextInput } from "./formFields";
 import { isSamePerson, MAX_ADDITIONAL_APPROVERS, MIN_DIRECTORY_QUERY, type RequestDraft } from "./requestFormModel";
 
 const personLabel = (p: Person): string => `${p.name} (${p.email})`;
@@ -40,6 +41,7 @@ export default function RequesterStep({
   onChange: (patch: Partial<RequestDraft>) => void;
 }) {
   const approversId = useId();
+  const approversError = useFieldError("additionalApprovers");
   const [asked, setAsked] = useState(false);
   const [open, setOpen] = useState(false);
   // What the directory is asked about: only what was typed, never the label of a picked person.
@@ -63,7 +65,7 @@ export default function RequesterStep({
       <Box sx={{ display: "grid", gap: 3, gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" } }}>
         <TextInput label="Date" value={today} disabled />
         <TextInput label="Your full name" value={me.name} disabled />
-        <TextInput label="WSO2 email" value={me.email} disabled />
+        <TextInput label="Member email" value={me.email} disabled />
       </Box>
       <TextInput
         disabled
@@ -72,10 +74,7 @@ export default function RequesterStep({
         placeholder="No team lead found"
       />
       {showApprovers ? (
-        <Box>
-          <FieldLabel htmlFor={approversId} required={needsApprover}>
-            Additional approvers
-          </FieldLabel>
+        <Box data-field-error={approversError ? "true" : undefined}>
           <Autocomplete
             id={approversId}
             // The list opens only once there is something to search for, so clicking the empty box shows nothing.
@@ -103,6 +102,11 @@ export default function RequesterStep({
             renderInput={(params) => (
               <TextField
                 {...params}
+                label="Additional approvers"
+                error={Boolean(approversError)}
+                helperText={approversError}
+                required={needsApprover}
+                slotProps={{ inputLabel: { ...params.InputLabelProps, shrink: true } }}
                 // Focus the field only when the requester asked for it, not when it is simply there.
                 autoFocus={asked && selected.length === 0}
                 placeholder={selected.length ? "" : "Search by email"}

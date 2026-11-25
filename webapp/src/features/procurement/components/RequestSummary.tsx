@@ -15,36 +15,57 @@
 // under the License.
 
 import { useState, type ReactNode } from "react";
-import { Box, Button, Card, CardContent, Chip, Stack, Typography } from "@wso2/oxygen-ui";
-import { INSTALLATION_TYPES, LICENSE_TYPES } from "../request-form/requestFormModel";
-import { formatDate } from "../procurementFormat";
-import type { BudgetDetails, Person, RequestCategory, RequestDetails, Vendor, YesNo } from "../types";
+import { Box, Button, Card, CardContent, Chip, Link, Stack, Typography } from "@wso2/oxygen-ui";
+import { EVENT_COSTS, EVENT_TYPES, INSTALLATION_TYPES, PACKAGE_INCLUSIONS, splitLinks, totalInvestment } from "../request-form/requestFormModel";
+import { formatSize } from "../request-form/attachmentRules";
+import { formatCalendarDate, formatDate } from "../procurementFormat";
+import type { BudgetDetails, EventDetails, Person, ProcurementCategory, RequestDetails, Vendor, YesNo } from "../types";
+
+/** A file on a request, as the summary lists it. A row with `onDownload` offers a Download button. */
+export interface AttachmentRow {
+  /** Tells the row apart from the others in the list. */
+  key: string;
+  /** The file's name. */
+  name: string;
+  /** The file's size in bytes. */
+  sizeBytes: number;
+  /** What the malware scan says, when it is worth saying. */
+  note?: string;
+  /** Saves the file; the row has no Download button without it. */
+  onDownload?: () => void;
+  /** Whether this file is being downloaded now. */
+  downloading?: boolean;
+}
 
 /** Everything a summary shows, whether it comes from a draft in the form or a saved request. */
 export interface RequestView {
-  category: RequestCategory | "";
+  category: ProcurementCategory | "";
   requester: Person;
   teamLead: Person | null;
   /** Emails of the people who may approve besides the team lead. */
   additionalApprovers: string[];
   details: RequestDetails;
+  /** The event of a Marketing & Events request; empty for any other category. */
+  event: EventDetails;
   vendors: Vendor[];
   /** Each value is what a person reads (a label), not a code. */
   budget: BudgetDetails;
   /** The budget approver's name. */
   budgetApprover: string;
   notes: string;
+  /** The files on the request, when it has any. */
+  attachments?: AttachmentRow[];
   /** A date to show with the key facts, with what it is called ("Date", "Raised"). */
   date?: { label: string; iso: string };
 }
 
-const CATEGORY_LABEL: Record<RequestCategory, string> = {
+const CATEGORY_LABEL: Record<ProcurementCategory, string> = {
   IT: "IT Related Procurement",
   "NON-IT": "Non-IT Related Procurement",
   EVENTS: "Marketing & Events Procurement",
 };
 
-const CATEGORY_SHORT: Record<RequestCategory, string> = {
+const CATEGORY_SHORT: Record<ProcurementCategory, string> = {
   IT: "IT request",
   "NON-IT": "Non-IT request",
   EVENTS: "Marketing & Events request",
@@ -79,6 +100,27 @@ function ClampedText({ text }: { text: string }) {
         </Button>
       )}
     </>
+  );
+}
+
+const isWebLink = (text: string): boolean => /^https?:\/\/\S+$/.test(text);
+
+/** Links in a text that holds one or several. A link opens in a new tab; anything that is not an http(s) link stays as plain text. */
+function LinkList({ text }: { text: string }) {
+  return (
+    <Stack spacing={0.25}>
+      {splitLinks(text).map((link, index) =>
+        isWebLink(link) ? (
+          <Link key={index} href={link} target="_blank" rel="noopener noreferrer" variant="body2" sx={{ overflowWrap: "anywhere" }}>
+            {link}
+          </Link>
+        ) : (
+          <Typography key={index} variant="body2" sx={{ overflowWrap: "anywhere" }}>
+            {link}
+          </Typography>
+        ),
+      )}
+    </Stack>
   );
 }
 
@@ -141,49 +183,35 @@ const choiceLabel = (choices: readonly { value: string; label: string }[], value
   choices.find((c) => c.value === value)?.label ?? value;
 
 function ItRows({ d }: { d: RequestDetails }) {
-  const saas = d.installationType === "SAAS";
   return (
     <>
       <Row label="Product / solution name" value={d.product} />
       <Row label="Plan / subscription tier" value={d.plan} />
       <Row label="Description of the product / solution" value={d.description} />
+      <Row label="Requirement to use this software" value={d.softwareRequirement} />
       <Row label="Installation type" value={choiceLabel(INSTALLATION_TYPES, d.installationType)} />
-      <Row label="Licence type" value={choiceLabel(LICENSE_TYPES, d.licenseType)} />
-      <Row label="Software link" value={d.softwareUrl} />
-      <Row label="Pricing link" value={d.pricingUrl} />
-      <Row label="Terms of service link" value={d.termsUrl} />
-      <Row label="Privacy policy link" value={d.privacyUrl} />
-      <Row label="Security / compliance link" value={d.securityUrl} />
       <Row label="Expected usage period" value={d.usagePeriod} />
-      <Row label="Urgent" value={yesNo(d.urgent)} />
-      {d.urgent === "yes" && <Row label="Why it is urgent" value={d.urgencyJustification} />}
-      {saas && (
-        <>
-          <Row label="Users" value={joined(d.userCount, d.userNames.join(", "))} />
-          <Row label="Administrators" value={joined(d.adminCount, d.adminNames.join(", "))} />
-        </>
-      )}
+      <Row label="Users" value={joined(d.userCount, d.userNames.join(", "))} />
+      <Row label="Administrators" value={joined(d.adminCount, d.adminNames.join(", "))} />
+      <Row label="External parties interact with it" value={yesNo(d.externalInteraction)} />
       <Row label="Business justification" value={d.businessJustification} />
       <Row label="ROI" value={d.roi} optional />
-      {saas && (
+      <Row label="Stores sensitive Choreo Labs data" value={yesNo(d.sensitiveData)} />
+      {d.sensitiveData === "yes" && <Row label="Sensitive data" value={d.sensitiveDataDetail} />}
+      <Row label="Stores external PII" value={yesNo(d.externalPii)} />
+      {d.externalPii === "yes" && <Row label="External PII" value={d.externalPiiDetail} />}
+      <Row label="Stores employee PII" value={yesNo(d.employeePii)} />
+      {d.employeePii === "yes" && <Row label="Employee PII" value={d.employeePiiDetail} />}
+      <Row label="Integrates with Choreo Labs systems" value={yesNo(d.integrates)} />
+      {d.integrates === "yes" && (
         <>
-          <Row label="Stores sensitive WSO2 data" value={yesNo(d.sensitiveData)} />
-          {d.sensitiveData === "yes" && <Row label="Sensitive data" value={d.sensitiveDataDetail} />}
-          <Row label="Stores external PII" value={yesNo(d.externalPii)} />
-          {d.externalPii === "yes" && <Row label="External PII" value={d.externalPiiDetail} />}
-          <Row label="Stores employee PII" value={yesNo(d.employeePii)} />
-          {d.employeePii === "yes" && <Row label="Employee PII" value={d.employeePiiDetail} />}
-          <Row label="Integrates with WSO2 systems" value={yesNo(d.integrates)} />
-          {d.integrates === "yes" && (
-            <>
-              <Row label="Integrations" value={d.integrations.map((i) => joined(i.system, i.data)).join("\n")} />
-              <Row label="Vendor documentation" value={yesNo(d.vendorDocs)} />
-              {d.vendorDocs === "yes" && <Row label="Documentation link(s)" value={d.vendorDocsLink} />}
-            </>
+          <Row label="Integrations" value={d.integrations.map((i) => joined(i.system, i.data)).join("\n")} />
+          <Row label="Vendor documentation" value={yesNo(d.vendorDocs)} />
+          {d.vendorDocs === "yes" && (
+            <Row label="Documentation link(s)">{d.vendorDocsLink.trim() !== "" && <LinkList text={d.vendorDocsLink} />}</Row>
           )}
         </>
       )}
-      <Row label="Confirmations" value={d.authorizedListChecked && d.legitimacyConfirmed ? "Authorised list checked; legitimacy confirmed" : ""} />
     </>
   );
 }
@@ -195,6 +223,65 @@ function NonItRows({ d }: { d: RequestDetails }) {
       <Row label="Additional specifications or document links" value={d.specifications} optional />
       <Row label="Business justification" value={d.businessJustification} />
       <Row label="ROI" value={d.roi} optional />
+    </>
+  );
+}
+
+const usd = (amount: number): string => amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+const amountOf = (value: string): string => (value.trim() === "" ? "" : usd(Number(value)));
+
+/** The rows of a Marketing & Events request: the event, its costs and what it should return. */
+function EventRows({ e }: { e: EventDetails }) {
+  const industry = e.eventType === "INDUSTRY_EVENT_SPONSORSHIP";
+  const shortlisted = e.shortlisted === "yes";
+  return (
+    <>
+      <Row label="Event type" value={choiceLabel(EVENT_TYPES, e.eventType)} />
+      <Row label="On the EVENT_SHORTLIST" value={shortlisted ? joined("Yes", `Line ID ${e.shortlistLineId}`) : yesNo(e.shortlisted)} />
+      <Row label="Event name" value={e.name} />
+      <Row label="Dates" value={e.startDate && e.endDate ? `${formatCalendarDate(e.startDate)} to ${formatCalendarDate(e.endDate)}` : ""} />
+      <Row label="Main audience" value={e.audience} />
+      {industry && (
+        <>
+          <Row label="Sponsorship package" value={e.packageName} />
+          <Row label="Package includes" value={e.packageInclusions.map((i) => choiceLabel(PACKAGE_INCLUSIONS, i)).join(", ")} optional />
+          <Row label="Prospectus or contract" value={e.prospectusUrl} optional>
+            {e.prospectusUrl.trim() !== "" && <LinkList text={e.prospectusUrl} />}
+          </Row>
+        </>
+      )}
+      {EVENT_COSTS.filter(({ value }) => e.costs[value].trim() !== "").map(({ value, label }) => (
+        <Row key={value} label={label} value={amountOf(e.costs[value])} />
+      ))}
+      {e.otherCosts
+        .filter((c) => c.amount.trim() !== "")
+        .map((c, index) => (
+          <Row key={index} label={c.description.trim() ? `Other cost: ${c.description.trim()}` : "Other cost"} value={amountOf(c.amount)} />
+        ))}
+      <Row label="Total investment" value={usd(totalInvestment(e.costs, e.otherCosts))} />
+      <Row label="Partner investment" value={e.partnerInvestmentPercent.trim() ? `${e.partnerInvestmentPercent.trim()}%` : "0%"} optional />
+      {!shortlisted && (
+        <>
+          <Row label="Target accounts attending" value={e.targetAccounts} />
+          <Row label="Key accounts" value={e.keyAccounts} optional />
+          <Row label="New pipeline" value={amountOf(e.newPipeline)} />
+          <Row label="ROI calculator" value={e.roiCalculatorUrl}>
+            {e.roiCalculatorUrl.trim() !== "" && <LinkList text={e.roiCalculatorUrl} />}
+          </Row>
+        </>
+      )}
+      {industry && !shortlisted && (
+        <>
+          <Row label="Attended before" value={yesNo(e.attendedBefore)} />
+          {e.attendedBefore === "yes" && (
+            <>
+              <Row label="Earlier attendance cost" value={amountOf(e.previousCost)} />
+              <Row label="Earlier pipeline" value={amountOf(e.previousPipeline)} />
+            </>
+          )}
+        </>
+      )}
+      {!shortlisted && <Row label="Brand goal" value={e.brandGoal} optional />}
     </>
   );
 }
@@ -214,8 +301,10 @@ export default function RequestSummary({
 }) {
   const edit = (step: number) => (onEditStep ? () => onEditStep(step) : undefined);
   const { budget: b } = view;
-  // Budget details are required for Non-IT only; for IT a blank one was skipped on purpose.
-  const budgetOptional = view.category !== "NON-IT";
+  // A vendor with no name is an empty entry the requester left in the form, and is not shown.
+  const vendors = view.vendors.filter((v) => v.name.trim() !== "");
+  // Budget details are required for Non-IT and Events; for IT a blank one was skipped on purpose.
+  const budgetOptional = view.category === "IT";
   return (
     <Stack spacing={2}>
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
@@ -235,35 +324,68 @@ export default function RequestSummary({
         <Row label="Procurement category" value={view.category ? CATEGORY_LABEL[view.category] : ""} />
         {view.category === "IT" && <ItRows d={view.details} />}
         {view.category === "NON-IT" && <NonItRows d={view.details} />}
+        {view.category === "EVENTS" && <EventRows e={view.event} />}
       </Section>
 
-      <Section title="Vendors" onEdit={edit(4)}>
-        {view.vendors.length === 0 ? (
-          <Row label="Proposed vendor" optional />
-        ) : (
-          view.vendors.map((v, index) => (
-            <Row
-              key={index}
-              label={view.vendors.length > 1 ? `Proposed vendor ${index + 1}` : "Proposed vendor"}
-              value={[joined(v.name, v.website), joined(v.contact, v.email, v.phone)].filter(Boolean).join("\n")}
-            />
-          ))
-        )}
-      </Section>
+      {view.category !== "EVENTS" && (
+        <Section title="Vendors" onEdit={edit(4)}>
+          {vendors.length === 0 ? (
+            <Row label="Proposed vendor" optional />
+          ) : (
+            vendors.map((v, index) => (
+              <Row key={index} label={vendors.length > 1 ? `Proposed vendor ${index + 1}` : "Proposed vendor"}>
+                <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                  {v.name}
+                </Typography>
+                {v.website.trim() !== "" && <LinkList text={v.website} />}
+                {joined(v.contact, v.email, v.phone) !== "" && (
+                  <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                    {joined(v.contact, v.email, v.phone)}
+                  </Typography>
+                )}
+              </Row>
+            ))
+          )}
+        </Section>
+      )}
 
       <Section title="Budget" onEdit={edit(4)}>
         <Row label="Budget category" value={b.category} optional={budgetOptional} />
         <Row label="Business unit" value={b.businessUnit} optional={budgetOptional} />
         <Row label="Product" value={b.product} optional={budgetOptional} />
         <Row label="Region" value={b.region} optional={budgetOptional} />
-        <Row label="Engagement code" value={b.engagementCode} optional={budgetOptional} />
+        <Row label={view.category === "EVENTS" ? "Engagement code / Budget owner" : "Engagement code"} value={b.engagementCode} optional={budgetOptional} />
         <Row label="Salesforce campaign" value={b.salesforceCampaign} optional />
-        <Row label="Budget approver" value={view.budgetApprover} optional={budgetOptional} />
+        {view.category !== "EVENTS" && <Row label="Budget approver" value={view.budgetApprover} optional={budgetOptional} />}
       </Section>
 
-      <Section title="Notes" onEdit={edit(4)}>
+      <Section title="Notes" onEdit={edit(view.category === "EVENTS" ? 3 : 4)}>
         <Row label="Notes for Procurement" value={view.notes} optional />
       </Section>
+
+      {view.attachments && view.attachments.length > 0 && (
+        <Section title="Attachments" onEdit={edit(view.category === "EVENTS" && view.event.eventType === "INDUSTRY_EVENT_SPONSORSHIP" ? 3 : 4)}>
+          {view.attachments.map((a) => (
+            <Row key={a.key} label={a.name}>
+              <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap">
+                <Typography variant="body2" color="text.secondary">
+                  {formatSize(a.sizeBytes)}
+                </Typography>
+                {a.note && (
+                  <Typography variant="body2" color="text.secondary">
+                    {a.note}
+                  </Typography>
+                )}
+                {a.onDownload && (
+                  <Button size="small" disabled={a.downloading} onClick={a.onDownload} aria-label={`Download ${a.name}`}>
+                    {a.downloading ? "Downloading…" : "Download"}
+                  </Button>
+                )}
+              </Stack>
+            </Row>
+          ))}
+        </Section>
+      )}
     </Stack>
   );
 }

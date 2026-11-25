@@ -94,19 +94,100 @@ export interface BackendDecision {
   decidedOn: string;
 }
 
+/** What an IT request says about the software it asks for. */
 export interface BackendItDetails {
+  /** The software's name. */
   softwareName: string;
-  isUrgent?: boolean;
-  urgencyJustification?: string | null;
+  /** The plan or subscription tier. */
+  planName: string;
+  /** What the requester needs the software for. */
+  softwareRequirement: string;
+  /** How long the software is expected to be used, as free text. */
+  usagePeriod: string;
+  /** How the software is installed. */
   installationType: "PORTABLE" | "PLUGIN" | "BROWSER_EXTENSION" | "STANDALONE" | "SAAS";
-  licenseType: "FREE_COMMERCIAL" | "PERSONAL" | "CUSTOMER" | "COMPANY";
-  softwareUrl: string;
-  pricingUrl: string;
-  termsUrl: string;
-  privacyUrl: string;
-  securityUrl: string;
-  authorizedListChecked?: boolean;
-  legitimacyConfirmed?: boolean;
+}
+
+/** One line of an event's total investment. */
+export interface BackendEventCost {
+  /** What the cost is for. */
+  category: "SPONSORSHIP_FEE" | "BOOTH_BUILD_AND_DESIGN" | "TRAVEL_AND_ACCOMMODATION" | "SWAG" | "PRINT_AND_BANNERS" | "PAYMENT_TO_PARTNER" | "OTHER";
+  /** What an `OTHER` cost is for. */
+  description?: string | null;
+  /** The amount in USD. */
+  amount: number;
+}
+
+/** The event of a Marketing & Events request. */
+export interface BackendEventDetails {
+  /** What kind of event it is. */
+  eventType: "INDUSTRY_EVENT_SPONSORSHIP" | "WSO2CON" | "WSO2_SUMMIT" | "OXYGENATE" | "ROUNDTABLE_LUNCH_AND_LEARN" | "OTHER_MARKETING_EVENT";
+  /** Whether the event is already approved on the event shortlist. */
+  isShortlisted?: boolean;
+  /** The event's Line ID on the shortlist. */
+  shortlistLineId?: string | null;
+  /** The event's name. */
+  eventName: string;
+  /** The first day of the event, as `YYYY-MM-DD`. */
+  startDate: string;
+  /** The last day of the event, as `YYYY-MM-DD`. */
+  endDate: string;
+  /** The event's main audience. */
+  audience: string;
+  /** The sponsorship package. */
+  packageName?: string | null;
+  /** What the sponsorship package includes. */
+  packageInclusions?: BackendPackageInclusion[];
+  /** Link to the organiser's prospectus or contract. */
+  prospectusUrl?: string | null;
+  /** The share of the investment that the partner pays, from 0 to 100. */
+  partnerInvestmentPercent?: number;
+  /** How many of the target accounts will attend. */
+  targetAccountCount?: number | null;
+  /** The key target accounts, by company name. */
+  keyAccounts?: string | null;
+  /** The new pipeline the event is expected to create, in USD. */
+  newPipelineAmount?: number | null;
+  /** Link to the completed ROI calculator. */
+  roiCalculatorUrl?: string | null;
+  /** Whether the event was attended before. */
+  attendedBefore?: boolean | null;
+  /** What the earlier attendance cost, in USD. */
+  previousCost?: number | null;
+  /** The pipeline the earlier attendance created, in USD. */
+  previousPipeline?: number | null;
+  /** Why the event matters for the brand, and what success looks like. */
+  brandGoal?: string | null;
+  /** The lines of the total investment. */
+  costs?: BackendEventCost[];
+}
+
+/** What a sponsorship package includes. */
+export type BackendPackageInclusion =
+  | "BOOTH_SPACE"
+  | "DELEGATE_PASSES"
+  | "SPEAKING_SLOT"
+  | "LEAD_SCANNING"
+  | "LOGO_PLACEMENT"
+  | "ATTENDEE_LIST"
+  | "SPONSORED_SESSION";
+
+/** A file attached to a request. */
+export interface BackendAttachment {
+  /** The identifier of the file. */
+  id: number;
+  /** The file's name. */
+  fileName: string;
+  /** The file's media type. */
+  contentType: string;
+  /** The file's size in bytes. */
+  sizeBytes: number;
+  /** What the malware scan found. */
+  scanStatus: "FAILED" | "INFECTED" | "CLEAN" | "PENDING";
+  /** Email of whoever attached it. */
+  uploadedBy: string;
+  /** When it was attached, as an ISO time. */
+  uploadedOn: string;
 }
 
 export interface BackendVendor {
@@ -122,11 +203,14 @@ export interface BackendAnswer {
   answer?: string | null;
 }
 
-export interface BackendSaasDetails {
+/** The users and the data and security assessment of the software an IT request asks for. */
+export interface BackendItAssessment {
   adminCount: number;
   adminDetails: string;
   userCount: number;
   userDetails: string;
+  /** Whether outside parties are expected to interact with the platform. */
+  externalInteraction?: boolean;
   handlesSensitiveData?: boolean;
   sensitiveDataDetails?: string | null;
   handlesExternalPii?: boolean;
@@ -160,7 +244,9 @@ export interface BackendRequestDetail extends BackendRequestSummary {
   teamLeadEmail: string | null;
   additionalApprovers: string[];
   itDetails: BackendItDetails | null;
-  saasDetails: BackendSaasDetails | null;
+  itAssessment: BackendItAssessment | null;
+  /** The event of a Marketing & Events request. */
+  eventDetails: BackendEventDetails | null;
   priority: BackendPriority | null;
   assigneeEmail: string | null;
   collaborators: string[];
@@ -186,7 +272,9 @@ export interface BackendNewRequest {
   budgetApproverId: number | null;
   additionalApprovers: string[];
   itDetails: BackendItDetails | null;
-  saasDetails: BackendSaasDetails | null;
+  itAssessment: BackendItAssessment | null;
+  /** The event of a Marketing & Events request; none for any other category. */
+  eventDetails: BackendEventDetails | null;
   answers: BackendAnswer[];
 }
 

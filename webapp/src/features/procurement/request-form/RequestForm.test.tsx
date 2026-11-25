@@ -15,11 +15,11 @@
 // under the License.
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Person, ProcurementLookups, ProcurementMe } from "../types";
 import RequestForm from "./RequestForm";
-import { emptyDraft, type RequestDraft } from "./requestFormModel";
+import { emptyDraft, emptyEvent, type RequestDraft } from "./requestFormModel";
 
 const { directorySearch } = vi.hoisted(() => ({ directorySearch: vi.fn() }));
 
@@ -73,7 +73,7 @@ const nonIt = (): RequestDraft => {
 describe("RequestForm, the requester step", () => {
   it("shows the backend's team lead read-only and the sign-in identity locked", () => {
     renderForm();
-    expect(screen.getByLabelText("WSO2 email")).toBeDisabled();
+    expect(screen.getByLabelText("Member email")).toBeDisabled();
     expect(screen.getByLabelText("Your full name")).toHaveValue("Req Uester");
     const teamLead = screen.getByLabelText(/Team lead \(for approval\)/);
     expect(teamLead).toBeDisabled();
@@ -130,7 +130,8 @@ describe("RequestForm, the requester step", () => {
   it("needs an additional approver when there is no manager, and accepts one picked from the directory", async () => {
     const { user } = renderForm({ ...me, teamLead: null });
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText(/Please complete: a team lead or an additional approver/)).toBeInTheDocument();
+    expect(screen.getByText("Add a team lead or an additional approver")).toBeInTheDocument();
+    expect(screen.getByText("Complete the 1 highlighted field to continue.")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/Additional approvers/), "oth");
     await user.click(await screen.findByRole("option", { name: "Other Approver (other@example.com)" }));
@@ -153,44 +154,172 @@ describe("RequestForm, the steps after it", () => {
     const { user } = renderForm();
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText(/Please complete: Procurement category/)).toBeInTheDocument();
+    expect(screen.getByText("Choose a category")).toBeInTheDocument();
+    expect(screen.getByText("Complete the 1 highlighted field to continue.")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^IT Related Procurement/ }));
+    await user.click(screen.getByRole("radio", { name: /^IT Related Procurement/ }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByRole("heading", { name: "IT requirement details" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText(/Please complete: Product \/ solution name/)).toBeInTheDocument();
+    expect(screen.getByText(/Complete the \d+ highlighted fields to continue\./)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Product \/ solution name/ })).toBeInvalid();
+    expect(screen.getAllByText("Required").length).toBeGreaterThan(0);
   });
 
-  it("asks for users, administrators and the security assessment only when the IT software is SaaS", async () => {
+  it("clears a field's message, and counts the rest, as it is filled in", async () => {
     const { user } = renderForm();
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    await user.click(screen.getByRole("button", { name: /^IT Related Procurement/ }));
+    await user.click(screen.getByRole("radio", { name: /^IT Related Procurement/ }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.queryByLabelText(/Number of users/)).toBeNull();
-    expect(screen.queryByText(/Data & security assessment/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    const before = Number(screen.getByText(/Complete the \d+ highlighted fields/).textContent?.match(/\d+/)?.[0]);
+    await user.type(screen.getByRole("textbox", { name: /Product \/ solution name/ }), "Figma");
+    expect(screen.getByRole("textbox", { name: /Product \/ solution name/ })).toBeValid();
+    expect(screen.getByText(`Complete the ${before - 1} highlighted ${before - 1 === 1 ? "field" : "fields"} to continue.`)).toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("combobox", { name: /Installation type/ }));
-    await user.click(await screen.findByRole("option", { name: /^SaaS/ }));
+  it("asks every IT request for users, administrators and the security assessment", async () => {
+    const { user } = renderForm();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("radio", { name: /^IT Related Procurement/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByLabelText(/Number of users/)).toBeInTheDocument();
     expect(screen.getByText(/Data & security assessment/)).toBeInTheDocument();
   });
 
-  it("marks both IT confirmations as required", async () => {
+  it("marks the IT requirement as required", async () => {
     const { user } = renderForm();
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    await user.click(screen.getByRole("button", { name: /^IT Related Procurement/ }));
+    await user.click(screen.getByRole("radio", { name: /^IT Related Procurement/ }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByRole("checkbox", { name: /authorised software list/ })).toBeRequired();
-    expect(screen.getByRole("checkbox", { name: /vendor and the software are legitimate/ })).toBeRequired();
+    expect(screen.getByRole("textbox", { name: /requirement to use this software/ })).toBeRequired();
   });
 
-  it("offers Marketing & Events as coming soon, not as a choice", async () => {
+  it("offers Marketing & Events as a choice that asks the event questions", async () => {
     const { user } = renderForm();
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText("Coming soon")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Marketing/ })).toBeNull();
+    expect(screen.queryByText("Coming soon")).toBeNull();
+    await user.click(screen.getByRole("radio", { name: /Marketing/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Event details" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /Event type/ })).toBeRequired();
+    expect(screen.getByText("What is the total investment?")).toBeInTheDocument();
+    expect(screen.queryByText("What is the sponsorship package, and what does it include?")).toBeNull();
+  });
+
+  it("asks only an industry event sponsorship for its package and whether it was attended before", async () => {
+    const draft = { ...emptyDraft(), category: "EVENTS" as const, event: { ...emptyEvent(), eventType: "WSO2CON" as const } };
+    const { user } = renderForm(me, draft);
+    for (let i = 0; i < 2; i += 1) await user.click(screen.getByRole("button", { name: /Continue/ }));
+    expect(screen.queryByRole("textbox", { name: /Package name/ })).toBeNull();
+    expect(screen.queryByRole("group", { name: /Previous attendance/ })).toBeNull();
+  });
+
+  it("asks a shortlisted industry event neither for its pipeline nor for earlier attendance", async () => {
+    const draft = { ...emptyDraft(), category: "EVENTS" as const, event: { ...emptyEvent(), eventType: "INDUSTRY_EVENT_SPONSORSHIP" as const } };
+    const { user } = renderForm(me, draft);
+    for (let i = 0; i < 2; i += 1) await user.click(screen.getByRole("button", { name: /Continue/ }));
+    expect(screen.getByRole("group", { name: /Previous attendance/ })).toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: /EVENT_SHORTLIST/ })).getByRole("button", { name: "Yes" }));
+    expect(screen.queryByRole("group", { name: /Previous attendance/ })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /Completed ROI calculator/ })).toBeNull();
+  });
+
+  it("lets the other costs be several lines, and shows the partner and Choreo Labs shares", async () => {
+    const draft = { ...emptyDraft(), category: "EVENTS" as const, event: { ...emptyEvent(), eventType: "WSO2CON" as const } };
+    const { user } = renderForm(me, draft);
+    for (let i = 0; i < 2; i += 1) await user.click(screen.getByRole("button", { name: /Continue/ }));
+    await user.type(screen.getByRole("spinbutton", { name: "Payment to partner" }), "1000");
+    await user.type(screen.getByRole("textbox", { name: "What it is for" }), "Stickers");
+    await user.type(screen.getByRole("spinbutton", { name: "Amount" }), "200");
+    await user.click(screen.getByRole("button", { name: "Add another cost" }));
+    expect(screen.getAllByRole("textbox", { name: "What it is for" })).toHaveLength(2);
+    expect(screen.getByText("Total investment: $1,200.00")).toBeInTheDocument();
+    await user.type(screen.getByRole("spinbutton", { name: /Partner's share/ }), "25");
+    expect(screen.getByText(/Choreo Labs investment: 75%/)).toBeInTheDocument();
+  });
+
+  it("adds the costs up", async () => {
+    const draft = { ...emptyDraft(), category: "EVENTS" as const, event: { ...emptyEvent(), eventType: "WSO2CON" as const } };
+    const { user } = renderForm(me, draft);
+    for (let i = 0; i < 2; i += 1) await user.click(screen.getByRole("button", { name: /Continue/ }));
+    await user.type(screen.getByRole("spinbutton", { name: "Sponsorship fee" }), "1000");
+    await user.type(screen.getByRole("spinbutton", { name: /^SWAG/ }), "500");
+    expect(screen.getByText("Total investment: $1,500.00")).toBeInTheDocument();
+  });
+
+  it("offers to attach files on the budget step of a Non-IT request, and the prospectus file for an industry event", async () => {
+    const first = renderForm(me, { ...nonIt(), budget: { category: "CAT-1", businessUnit: "BU-1", product: "PRD-1", region: "REG-1", engagementCode: "ENG-1", salesforceCampaign: "" }, budgetApproverId: "10" });
+    for (let i = 0; i < 3; i += 1) await first.user.click(screen.getByRole("button", { name: /Continue/ }));
+    expect(screen.getByText("Attachments")).toBeInTheDocument();
+    expect(screen.getByText(/PDF, Word, Excel, PowerPoint, PNG or JPEG, up to 10 MB each, at most 10 files\./)).toBeInTheDocument();
+  });
+
+  it("asks for the prospectus as a file as well as a link, for an industry event sponsorship", async () => {
+    const draft = { ...emptyDraft(), category: "EVENTS" as const, event: { ...emptyEvent(), eventType: "INDUSTRY_EVENT_SPONSORSHIP" as const } };
+    const { user } = renderForm(me, draft);
+    for (let i = 0; i < 2; i += 1) await user.click(screen.getByRole("button", { name: /Continue/ }));
+    expect(screen.getByRole("textbox", { name: /prospectus or contract \(link\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add files" })).toBeInTheDocument();
+  });
+
+  it("moves between the category cards with the arrow keys, wrapping round, and keeps one card as the tab stop", async () => {
+    const { user } = renderForm();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    const cards = screen.getAllByRole("radio");
+    const stops = () => cards.map((c) => c.getAttribute("tabindex"));
+    expect(stops()).toEqual(["0", "-1", "-1"]);
+    await user.click(cards[0]);
+    await user.keyboard("{ArrowRight}");
+    expect(cards[1]).toBeChecked();
+    expect(cards[1]).toHaveFocus();
+    expect(stops()).toEqual(["-1", "0", "-1"]);
+    await user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(cards[2]).toBeChecked();
+  });
+
+  it("marks the category group as required, and invalid with its message once none is chosen", async () => {
+    const { user } = renderForm();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    const group = screen.getByRole("radiogroup", { name: "Procurement category" });
+    expect(group).toHaveAttribute("aria-required", "true");
+    expect(group).not.toHaveAttribute("aria-invalid");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(group).toHaveAttribute("aria-invalid", "true");
+    expect(document.getElementById(group.getAttribute("aria-describedby") ?? "")).toHaveTextContent("Choose a category");
+  });
+
+  it("marks a Yes/No question whose answer is missing as invalid and ties it to its message", async () => {
+    const { user } = renderForm(me, { ...emptyDraft(), category: "IT" });
+    for (let i = 0; i < 3; i += 1) await user.click(screen.getByRole("button", { name: /Continue/ }));
+    const question = screen.getByRole("group", { name: /interact with this platform/ });
+    expect(question).toHaveAttribute("aria-invalid", "true");
+    const message = document.getElementById(question.getAttribute("aria-describedby") ?? "");
+    expect(message).toHaveTextContent("Select an option");
+  });
+
+  it("asks for the budget without vendors on the next step", async () => {
+    const draft = {
+      ...emptyDraft(),
+      category: "EVENTS" as const,
+      event: {
+        ...emptyEvent(),
+        eventType: "WSO2CON" as const,
+        shortlisted: "yes" as const,
+        shortlistLineId: "L-42",
+        name: "WSO2CON",
+        startDate: "2027-03-01",
+        endDate: "2027-03-03",
+        audience: "Customers",
+        costs: { ...emptyEvent().costs, SWAG: "100" },
+      },
+    };
+    const { user } = renderForm(me, draft);
+    for (let i = 0; i < 3; i += 1) await user.click(screen.getByRole("button", { name: /Continue/ }));
+    expect(screen.getByRole("heading", { name: "Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add files" })).toBeInTheDocument();
+    expect(screen.queryByText("Proposed vendor")).toBeNull();
   });
 
   it("asks for the engagement code and budget approver only after a business unit, and clears them when it changes", async () => {

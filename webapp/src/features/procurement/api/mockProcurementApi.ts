@@ -22,6 +22,8 @@
 // only a rejected request is edited.
 
 import type {
+  Attachment,
+  AttachmentsDraft,
   BudgetApproverOption,
   Choice,
   Person,
@@ -31,7 +33,7 @@ import type {
   PurchaseRequest,
   PurchaseRequestInput,
 } from "../types";
-import { emptyDetails } from "../request-form/requestFormModel";
+import { emptyDetails, emptyEvent } from "../request-form/requestFormModel";
 import type { ProcurementApi } from "./procurementApi";
 
 const person = (name: string, email: string): Person => ({ id: email, name, email });
@@ -123,7 +125,7 @@ const MIN_QUERY_LENGTH = 3;
 
 function seedRequests(requester: Person): PurchaseRequest[] {
   const L = MOCK_LOOKUPS;
-  const base = { additionalApprovers: [], notes: "", priority: null, assignee: "", collaborators: [], requester, budgetApproverId: "10", budgetApproverName: "Budget Owner" };
+  const base = { event: emptyEvent(), additionalApprovers: [], notes: "", priority: null, assignee: "", collaborators: [], requester, budgetApproverId: "10", budgetApproverName: "Budget Owner" };
   const vendor = (name: string, website: string) => ({ name, website, contact: "", email: "", phone: "" });
   return [
     {
@@ -149,15 +151,8 @@ function seedRequests(requester: Person): PurchaseRequest[] {
         product: "ZoomInfo",
         plan: "Enterprise",
         installationType: "SAAS" as const,
-        licenseType: "COMPANY" as const,
-        softwareUrl: "https://www.zoominfo.com",
-        pricingUrl: "https://www.zoominfo.com/pricing",
-        termsUrl: "https://www.zoominfo.com/terms",
-        privacyUrl: "https://www.zoominfo.com/privacy",
-        securityUrl: "https://www.zoominfo.com/security",
-        urgent: "no" as const,
-        authorizedListChecked: true,
-        legitimacyConfirmed: true,
+        softwareRequirement: "Prospecting data for the Sales team.",
+        externalInteraction: "no",
         description: "Contact and company data for the Sales team's prospecting.",
         usagePeriod: "1 year",
         businessJustification: "The current subscription ends next month.",
@@ -233,15 +228,8 @@ function seedRequests(requester: Person): PurchaseRequest[] {
         product: "SentinelOne",
         plan: "Complete",
         installationType: "SAAS" as const,
-        licenseType: "COMPANY" as const,
-        softwareUrl: "https://www.sentinelone.com",
-        pricingUrl: "https://www.sentinelone.com/pricing",
-        termsUrl: "https://www.sentinelone.com/terms",
-        privacyUrl: "https://www.sentinelone.com/privacy",
-        securityUrl: "https://www.sentinelone.com/security",
-        urgent: "no" as const,
-        authorizedListChecked: true,
-        legitimacyConfirmed: true,
+        softwareRequirement: "Endpoint protection for engineering laptops.",
+        externalInteraction: "no",
         description: "Endpoint protection for engineering laptops.",
         usagePeriod: "1 year",
         businessJustification: "Replaces the current endpoint tool, which reaches end of support.",
@@ -262,6 +250,7 @@ function approvalSeeds(approver: Person): PurchaseRequest[] {
   const L = MOCK_LOOKUPS;
   const waiting = { decision: "pending" as const, notes: "", decidedAt: null, decidedBy: "", isOverride: false };
   const base = {
+    event: emptyEvent(),
     additionalApprovers: [],
     notes: "",
     priority: null,
@@ -314,7 +303,7 @@ function approvalSeeds(approver: Person): PurchaseRequest[] {
 const urgencyRank = (priority: Priority | null): number => (priority ? ["P1", "P2", "P3"].indexOf(priority) : 3);
 
 function titleFor(input: PurchaseRequestInput): string {
-  const text = input.category === "IT" ? input.details.product : input.details.description;
+  const text = input.category === "IT" ? input.details.product : input.category === "EVENTS" ? input.event.name : input.details.description;
   return text.trim().split("\n")[0].slice(0, 80) || "Untitled request";
 }
 
@@ -335,6 +324,39 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
     if (emails.includes(user.email.toLowerCase()) || emails.includes(TEAM_LEAD.email.toLowerCase())) {
       throw new Error("An additional approver cannot be you or your team lead.");
     }
+  };
+
+  const attached = new Map<string, { meta: Attachment; blob: Blob }[]>([
+    [
+      "seed-2",
+      [
+        {
+          meta: { id: "a-1", name: "Colombo-space-quote.pdf", contentType: "application/pdf", sizeBytes: 182_000, scanStatus: "clean", uploadedBy: user.email, uploadedAt: "2026-11-03T08:00:00.000Z" },
+          blob: new Blob(["Sample quote"], { type: "application/pdf" }),
+        },
+      ],
+    ],
+  ]);
+  let attachmentCounter = 1;
+  /** Makes the request's sample files match the requester's choice, as the backend's calls would. */
+  const syncAttachments = (requestId: string, { removed, files }: AttachmentsDraft): void => {
+    const kept = (attached.get(requestId) ?? []).filter((a) => !removed.includes(a.meta.id));
+    for (const file of files) {
+      attachmentCounter += 1;
+      kept.push({
+        meta: {
+          id: `a-${attachmentCounter}`,
+          name: file.name,
+          contentType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          scanStatus: "clean",
+          uploadedBy: user.email,
+          uploadedAt: new Date().toISOString(),
+        },
+        blob: file,
+      });
+    }
+    attached.set(requestId, kept);
   };
 
   const approverName = (id: string): string => MOCK_BUDGET_APPROVERS.find((a) => a.id === id)?.name ?? "";
@@ -375,6 +397,7 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
         additionalApprovers: input.additionalApprovers,
         teamLeadDecision: { decision: "pending", notes: "", decidedAt: null, decidedBy: "", isOverride: false },
         details: input.details,
+        event: input.event,
         vendors: input.vendors,
         budget: input.budget,
         budgetApproverId: input.budgetApproverId,
@@ -387,6 +410,7 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
         updatedAt: now,
       };
       requests.push(created);
+      syncAttachments(created.id, input.attachments);
       return { id: created.id, reference: created.reference };
     },
     resubmitRequest: async (requestId, input) => {
@@ -401,6 +425,7 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
         additionalApprovers: input.additionalApprovers,
         teamLeadDecision: { decision: "pending", notes: "", decidedAt: null, decidedBy: "", isOverride: false },
         details: input.details,
+        event: input.event,
         vendors: input.vendors,
         budget: input.budget,
         budgetApproverId: input.budgetApproverId,
@@ -408,6 +433,7 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
         notes: input.notes,
         updatedAt: new Date().toISOString(),
       });
+      syncAttachments(requestId, input.attachments);
     },
     listApprovals: async (status = "submitted") =>
       toApprove
@@ -470,6 +496,15 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
         throw new Error("Only a submitted or rejected request can be cancelled.");
       }
       Object.assign(existing, { status: "cancelled", updatedAt: new Date().toISOString() });
+    },
+    listAttachments: async (requestId) => {
+      find(requestId);
+      return (attached.get(requestId) ?? []).map((a) => a.meta);
+    },
+    downloadAttachment: async (requestId, attachmentId) => {
+      const found = (attached.get(requestId) ?? []).find((a) => a.meta.id === attachmentId);
+      if (!found) throw new Error("Attachment not found.");
+      return found.blob;
     },
   };
 }

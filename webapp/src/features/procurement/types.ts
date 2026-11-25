@@ -18,10 +18,8 @@
 // backend's own wire shapes live in api/backendTypes.ts; api/backendMapping.ts
 // converts between the two.
 
-export type ProcurementCategory = "IT" | "NON-IT";
-
-/** A category a request can have when it is read back; Marketing & Events cannot be raised here yet. */
-export type RequestCategory = ProcurementCategory | "EVENTS";
+/** What a request is for: IT, Non-IT, or Marketing & Events. */
+export type ProcurementCategory = "IT" | "NON-IT" | "EVENTS";
 
 /**
  * Where a request stands. `draft` is saved but not sent; `submitted` waits on
@@ -34,9 +32,6 @@ export type YesNo = "yes" | "no";
 
 /** How the software is installed, as the backend names it. */
 export type InstallationType = "PORTABLE" | "PLUGIN" | "BROWSER_EXTENSION" | "STANDALONE" | "SAAS";
-
-/** Whose licence the software is used under, as the backend names it. */
-export type LicenseType = "FREE_COMMERCIAL" | "PERSONAL" | "CUSTOMER" | "COMPANY";
 
 /** An employee. `id` is the email, which is what the backend identifies people by. */
 export interface Person {
@@ -72,22 +67,16 @@ export interface RequestDetails {
   product: string;
   plan: string;
   description: string;
+  /** What the requester needs the software for. */
+  softwareRequirement: string;
   installationType: InstallationType | "";
-  licenseType: LicenseType | "";
-  softwareUrl: string;
-  pricingUrl: string;
-  termsUrl: string;
-  privacyUrl: string;
-  securityUrl: string;
-  urgent: YesNo | "";
-  urgencyJustification: string;
-  authorizedListChecked: boolean;
-  legitimacyConfirmed: boolean;
   userCount: string;
   userNames: string[];
   adminCount: string;
   adminNames: string[];
   usagePeriod: string;
+  /** Whether customers, partners or other outside parties are expected to interact with the platform. */
+  externalInteraction: YesNo | "";
   businessJustification: string;
   roi: string;
   specifications: string;
@@ -103,6 +92,88 @@ export interface RequestDetails {
   vendorDocsLink: string;
 }
 
+/** What kind of event a Marketing & Events request is for, as the backend names it. */
+export type EventType =
+  | "INDUSTRY_EVENT_SPONSORSHIP"
+  | "WSO2CON"
+  | "WSO2_SUMMIT"
+  | "OXYGENATE"
+  | "ROUNDTABLE_LUNCH_AND_LEARN"
+  | "OTHER_MARKETING_EVENT";
+
+/** What a sponsorship package includes, as the backend names it. */
+export type PackageInclusion =
+  | "BOOTH_SPACE"
+  | "DELEGATE_PASSES"
+  | "SPEAKING_SLOT"
+  | "LEAD_SCANNING"
+  | "LOGO_PLACEMENT"
+  | "ATTENDEE_LIST"
+  | "SPONSORED_SESSION";
+
+/** The fixed lines of an event's total investment, as the backend names them. The other costs are lines that the requester names. */
+export type EventCostCategory =
+  | "SPONSORSHIP_FEE"
+  | "BOOTH_BUILD_AND_DESIGN"
+  | "TRAVEL_AND_ACCOMMODATION"
+  | "SWAG"
+  | "PRINT_AND_BANNERS"
+  | "PAYMENT_TO_PARTNER";
+
+/** One of the other costs of an event, which the requester describes. */
+export interface OtherCost {
+  /** What the cost is for. */
+  description: string;
+  /** The amount in USD, as typed. */
+  amount: string;
+}
+
+/** What the requester says about the event of a Marketing & Events request. Amounts are kept as typed. */
+export interface EventDetails {
+  /** What kind of event it is; blank until chosen. */
+  eventType: EventType | "";
+  /** Whether the event is already approved on the event shortlist. */
+  shortlisted: YesNo | "";
+  /** The event's Line ID on the shortlist; asked when it is shortlisted. */
+  shortlistLineId: string;
+  /** The event's name. */
+  name: string;
+  /** The first day of the event, as `YYYY-MM-DD`. */
+  startDate: string;
+  /** The last day of the event, as `YYYY-MM-DD`. */
+  endDate: string;
+  /** The event's main audience. */
+  audience: string;
+  /** The sponsorship package, for example "Gold sponsor". */
+  packageName: string;
+  /** What the sponsorship package includes. */
+  packageInclusions: PackageInclusion[];
+  /** Link to the organiser's prospectus or contract. */
+  prospectusUrl: string;
+  /** The fixed lines of the total investment, in USD as typed; blank is none. */
+  costs: Record<EventCostCategory, string>;
+  /** The other lines of the total investment, each named by the requester. */
+  otherCosts: OtherCost[];
+  /** The share of the investment that the partner pays, from 0 to 100; blank is 0. */
+  partnerInvestmentPercent: string;
+  /** How many of the target accounts will attend, as a whole number. */
+  targetAccounts: string;
+  /** The key target accounts, by company name. */
+  keyAccounts: string;
+  /** The new pipeline the event is expected to create, in USD. */
+  newPipeline: string;
+  /** Link to the completed ROI calculator. */
+  roiCalculatorUrl: string;
+  /** Whether the event was attended before; asked of an industry event sponsorship only. */
+  attendedBefore: YesNo | "";
+  /** What the earlier attendance cost, in USD. */
+  previousCost: string;
+  /** The pipeline the earlier attendance created, in USD. */
+  previousPipeline: string;
+  /** Why the event matters for the brand, and what success looks like. */
+  brandGoal: string;
+}
+
 /** The budget details of a request. Each list value is the code the backend knows it by. */
 export interface BudgetDetails {
   category: string;
@@ -113,17 +184,52 @@ export interface BudgetDetails {
   salesforceCampaign: string;
 }
 
+/** Where an attachment stands in the malware scan. */
+export type ScanStatus = "pending" | "clean" | "infected" | "failed";
+
+/** A file saved on a request. */
+export interface Attachment {
+  /** The backend's identifier for the file. */
+  id: string;
+  /** The file's name. */
+  name: string;
+  /** The file's media type. */
+  contentType: string;
+  /** The file's size in bytes. */
+  sizeBytes: number;
+  /** What the malware scan found. */
+  scanStatus: ScanStatus;
+  /** Email of whoever attached it. */
+  uploadedBy: string;
+  /** When it was attached, as an ISO time. */
+  uploadedAt: string;
+}
+
+/** What the form holds about a request's files: those already saved, those to remove on submit, and those still to upload. */
+export interface AttachmentsDraft {
+  /** The files the request holds and the requester has not taken off. */
+  saved: Attachment[];
+  /** The ids of saved files to remove when the request is sent. */
+  removed: string[];
+  /** The files chosen and not yet uploaded. */
+  files: File[];
+}
+
 /** What the requester fills in. The requester, team lead, status and dates are set by the server, never sent. */
 export interface PurchaseRequestInput {
   category: ProcurementCategory;
   /** Emails of the people who may approve besides the team lead; at most 5. */
   additionalApprovers: string[];
   details: RequestDetails;
+  /** The event of a Marketing & Events request; empty for any other category. */
+  event: EventDetails;
   vendors: Vendor[];
   budget: BudgetDetails;
   /** The chosen budget approver's id, or "" when none. */
   budgetApproverId: string;
   notes: string;
+  /** The files to keep, remove and upload with the request. */
+  attachments: AttachmentsDraft;
   declarationAccepted: boolean;
 }
 
@@ -152,7 +258,7 @@ export interface QueueItem {
   id: string;
   reference: string | null;
   title: string;
-  category: RequestCategory;
+  category: ProcurementCategory;
   status: RequestStatus;
   priority: Priority | null;
   /** Email of the person handling it, or "" when nobody is. */
@@ -166,7 +272,7 @@ export interface ApprovalItem {
   id: string;
   reference: string | null;
   title: string;
-  category: RequestCategory;
+  category: ProcurementCategory;
   status: RequestStatus;
   requester: Person;
   submittedAt: string | null;
@@ -186,7 +292,7 @@ export interface RequestSummary {
   /** Null until the request is first submitted. */
   reference: string | null;
   title: string;
-  category: RequestCategory;
+  category: ProcurementCategory;
   status: RequestStatus;
   submittedAt: string | null;
   updatedAt: string;
@@ -199,6 +305,8 @@ export interface PurchaseRequest extends RequestSummary {
   additionalApprovers: string[];
   teamLeadDecision: TeamLeadDecision;
   details: RequestDetails;
+  /** The event of a Marketing & Events request; empty for any other category. */
+  event: EventDetails;
   vendors: Vendor[];
   budget: BudgetDetails;
   budgetApproverId: string;

@@ -18,7 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Person } from "../types";
-import { emptyBudget, emptyDetails, emptyVendor } from "../request-form/requestFormModel";
+import { emptyBudget, emptyDetails, emptyEvent, emptyVendor } from "../request-form/requestFormModel";
 import RequestSummary, { type RequestView } from "./RequestSummary";
 
 const requester: Person = { id: "u-1", name: "Emery Quinn", email: "emery.quinn@example.com" };
@@ -29,6 +29,7 @@ const view = (patch: Partial<RequestView> = {}): RequestView => ({
   requester,
   teamLead: lead,
   details: { ...emptyDetails(), product: "ZoomInfo", plan: "Enterprise", description: "Data", usagePeriod: "1 year", businessJustification: "Needed", sensitiveData: "no", externalPii: "no", employeePii: "no", integrates: "no" },
+  event: emptyEvent(),
   vendors: [{ ...emptyVendor(), name: "ZoomInfo" }],
   budget: emptyBudget(),
   additionalApprovers: [],
@@ -99,5 +100,93 @@ describe("RequestSummary", () => {
     await user.click(screen.getByRole("button", { name: "Edit Budget" }));
     expect(onEditStep.mock.calls).toEqual([[1], [4]]);
     expect(within(screen.getByRole("button", { name: "Edit Requirement details" })).getByText("Edit")).toBeInTheDocument();
+  });
+
+  it("shows an event with its costs and total, and no vendors card", () => {
+    const event = {
+      ...emptyEvent(),
+      eventType: "INDUSTRY_EVENT_SPONSORSHIP" as const,
+      shortlisted: "no" as const,
+      name: "KubeCon",
+      startDate: "2027-03-01",
+      endDate: "2027-03-03",
+      audience: "Platform engineers",
+      packageName: "Gold sponsor",
+      packageInclusions: ["BOOTH_SPACE" as const, "SPEAKING_SLOT" as const],
+      attendedBefore: "no" as const,
+      costs: { ...emptyEvent().costs, SPONSORSHIP_FEE: "60000", SWAG: "500" },
+      targetAccounts: "10",
+      keyAccounts: "Acme",
+      newPipeline: "500000",
+      roiCalculatorUrl: "https://example.com/roi",
+    };
+    render(<RequestSummary view={view({ category: "EVENTS", event, vendors: [] })} />);
+    expect(screen.getByText("Industry event sponsorship")).toBeInTheDocument();
+    expect(screen.getByText("Booth space, Speaking slot")).toBeInTheDocument();
+    expect(screen.getByText("$60,500.00")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Vendors" })).toBeNull();
+  });
+
+  it("shows links as links that open in a new tab, and anything else as plain text", () => {
+    const details = { ...view().details, integrates: "yes" as const, vendorDocs: "yes" as const, vendorDocsLink: "https://example.com/docs, not-a-link" };
+    render(<RequestSummary view={view({ details, vendors: [{ ...emptyVendor(), name: "Acme", website: "https://www.acme.example.com" }] })} />);
+    const docs = screen.getByRole("link", { name: "https://example.com/docs" });
+    expect(docs).toHaveAttribute("href", "https://example.com/docs");
+    expect(docs).toHaveAttribute("target", "_blank");
+    expect(docs).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    expect(screen.getByRole("link", { name: "https://www.acme.example.com" })).toBeInTheDocument();
+    expect(screen.getByText("not-a-link")).not.toHaveAttribute("href");
+  });
+
+  it("lists the attachments with a Download only for those that can be downloaded", async () => {
+    const user = userEvent.setup();
+    const onDownload = vi.fn();
+    render(
+      <RequestSummary
+        view={view({
+          attachments: [
+            { key: "1", name: "quote.pdf", sizeBytes: 2048, onDownload },
+            { key: "2", name: "scan.pdf", sizeBytes: 100, note: "Blocked: the scan found a problem" },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Attachments" })).toBeInTheDocument();
+    expect(screen.getByText("Blocked: the scan found a problem")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Download/ })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Download quote.pdf" }));
+    expect(onDownload).toHaveBeenCalledOnce();
+  });
+
+  it("opens the step that holds the attachments: the event step for an industry sponsorship, the budget step for other requests", async () => {
+    const user = userEvent.setup();
+    const onEditStep = vi.fn();
+    const attachments = [{ key: "1", name: "quote.pdf", sizeBytes: 10 }];
+    const event = { ...emptyEvent(), eventType: "INDUSTRY_EVENT_SPONSORSHIP" as const };
+    const { rerender } = render(<RequestSummary view={view({ category: "EVENTS", event, attachments })} onEditStep={onEditStep} />);
+    await user.click(screen.getByRole("button", { name: "Edit Attachments" }));
+    rerender(<RequestSummary view={view({ category: "EVENTS", event: { ...event, eventType: "WSO2CON" }, attachments })} onEditStep={onEditStep} />);
+    await user.click(screen.getByRole("button", { name: "Edit Attachments" }));
+    rerender(<RequestSummary view={view({ attachments })} onEditStep={onEditStep} />);
+    await user.click(screen.getByRole("button", { name: "Edit Attachments" }));
+    expect(onEditStep.mock.calls).toEqual([[3], [4], [4]]);
+  });
+
+  it("has no Attachments card when there are none", () => {
+    render(<RequestSummary view={view({ attachments: [] })} />);
+    expect(screen.queryByRole("heading", { name: "Attachments" })).toBeNull();
+  });
+
+  it("does not show a vendor the requester left empty, and says none was proposed", () => {
+    render(<RequestSummary view={view({ vendors: [emptyVendor()] })} />);
+    const row = screen.getByText("Proposed vendor").parentElement as HTMLElement;
+    expect(within(row).getByText("Not provided")).toBeInTheDocument();
+  });
+
+  it("numbers only the vendors that have a name", () => {
+    render(<RequestSummary view={view({ vendors: [{ ...emptyVendor(), name: "Acme" }, emptyVendor(), { ...emptyVendor(), name: "Globex" }] })} />);
+    expect(screen.getByText("Proposed vendor 1")).toBeInTheDocument();
+    expect(screen.getByText("Proposed vendor 2")).toBeInTheDocument();
+    expect(screen.queryByText("Proposed vendor 3")).toBeNull();
   });
 });

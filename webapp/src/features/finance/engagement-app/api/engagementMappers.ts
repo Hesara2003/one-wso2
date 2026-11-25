@@ -16,6 +16,7 @@
 
 // Wire (openapi.yaml) → view model.
 
+import * as DM from "./dashboardMappers";
 import type * as V from "./engagementTypes";
 import type * as W from "./engagementWire";
 import { ALLOCATION_STATUSES, ENGAGEMENT_STATUSES, REQUEST_STATUSES, TRAVEL_STATUSES } from "../model/statuses";
@@ -60,7 +61,10 @@ const hourly = (h: W.WHourly | null | undefined): V.HourlyWindow | undefined =>
 
 // ---------------------------------------------------------------- access and reference
 
-export const userInfo = (u: W.WUserInfo): V.UserInfo => u;
+export const userInfo = (u: W.WUserInfo): V.UserInfo => ({
+  ...u,
+  accessRequestEmail: u.accessRequestEmail?.trim() || undefined,
+});
 
 export function referenceData(r: W.WReferenceData): V.ReferenceData {
   const allocationTypes = (r.allocationTypes ?? []).filter((a) => norm(a.status ?? "") === "active").map(allocationType);
@@ -260,6 +264,8 @@ export const upcomingAllocation = (a: W.WAllocationSummary): V.UpcomingAllocatio
   end: a.endDate,
   status: a.clearanceStatus ? canon(a.clearanceStatus, ALLOCATION_STATUSES) : undefined,
   current: a.current,
+  // Left undefined when the backend sends none, so the list's own answer can stand in for it.
+  canOpen: a.canOpen,
 });
 
 export const timelineItem = (t: W.WTimelineItem): V.TimelineItem => ({
@@ -341,6 +347,7 @@ export function travelDetail(t: W.WTravelRequestDetail): V.TravelRequest {
       invoices: Boolean(t.tabs.invoices),
       travelCards: Boolean(t.tabs.travelCards),
       payments: Boolean(t.tabs.payments),
+      expenses: Boolean(t.tabs.expenses),
     },
   };
 }
@@ -386,6 +393,37 @@ export const invoice = (i: W.WInvoice): V.Invoice => ({
   addedBy: opt(i.addedBy),
   campaign: campaign(i.campaign),
   actions: i.actions,
+});
+
+/** Expense Claims status codes (expense_app). */
+const CLAIM_STATUS: Record<string, string> = { "0": "Pending Approval", "1": "Rejected", "2": "Lead Approved", "3": "Approved" };
+/** Credit card transaction statuses (expense_app), as words. */
+const CARD_STATUS: Record<string, string> = { new: "New", pending_lead: "Pending Lead", pending_finance: "Pending Finance", submitted: "Submitted" };
+const num = (n: number | null | undefined): number | undefined => (n === null || n === undefined ? undefined : n);
+
+export const tripExpenses = (w: W.WTripExpenses): V.TripExpenses => ({
+  cardExpenses: (w.cardExpenses ?? []).map((c) => ({
+    id: String(c.id),
+    date: opt(c.date),
+    expenseType: opt(c.expenseType),
+    reference: opt(c.reference),
+    amount: num(c.amount),
+    currency: opt(c.currency),
+    employee: opt(c.employeeEmail),
+    status: CARD_STATUS[s(c.status)] ?? (s(c.status) || "—"),
+  })),
+  expenseClaims: (w.expenseClaims ?? []).map((c) => ({
+    id: String(c.id),
+    claimNumber: opt(c.claimNumber),
+    date: opt(c.date),
+    expenseType: opt(c.expenseType),
+    amount: num(c.amount),
+    currency: opt(c.currency),
+    reimbursementAmount: num(c.reimbursementAmount),
+    reimbursementCurrency: opt(c.reimbursementCurrency),
+    employee: opt(c.employeeEmail),
+    status: CLAIM_STATUS[s(c.status)] ?? (s(c.status) || "—"),
+  })),
 });
 
 export const travelCard = (c: W.WTravelCard): V.TravelCard => ({
@@ -512,31 +550,21 @@ const bucket = (b: W.WBucket): V.CountRow => ({ label: b.label, count: b.value }
 const series = (rows: W.WSeriesPoint[], key: string): V.MonthValue[] => rows.map((r) => ({ month: r.month, value: r.values[key] ?? 0 }));
 
 export function dashboard(d: W.WDashboard): V.Dashboard {
-  const mw = d.myWork;
-  const myAllocations = [mw?.currentAllocation, mw?.nextAllocation].filter((a): a is W.WAllocationSummary => Boolean(a)).map(upcomingAllocation);
-  const myTrips = (mw?.nextTrips ?? []).map(upcomingTrip);
-  const tc = d.travelCost;
   return {
+    date: d.date,
     failed: d.failedSections ?? [],
-    myWork: mw && (myAllocations.length || myTrips.length) ? { allocations: myAllocations, trips: myTrips } : undefined,
+    widgets: DM.widgetRefs(d.widgets),
+    travelTeam: d.travelTeam ? DM.travelTeam(d.travelTeam) : undefined,
+    engagementManager: d.engagementManager ? DM.engagementManager(d.engagementManager) : undefined,
+    accountManager: d.accountManager ? DM.accountManager(d.accountManager) : undefined,
+    marketingEvents: d.marketingEvents ? DM.marketingEvents(d.marketingEvents) : undefined,
     queue: d.waitingOnYou?.map((c) => ({ key: c.key, label: c.label, count: c.count, highlighted: c.highlighted, to: c.list.path || undefined })),
     allocationsOverTime: d.allocationsOverTime
       ? { byMonth: series(d.allocationsOverTime.byMonth, "Allocations"), byBusinessUnit: d.allocationsOverTime.byBusinessUnit.map(bucket) }
       : undefined,
     engagements: d.engagements
       ? {
-          startingSoon: d.engagements.startingIn30Days.map((e) => ({
-            id: e.id,
-            kind: e.kind,
-            typeName: s(e.engagementTypeName),
-            account: s(e.account),
-            title: e.title,
-            country: s(e.country),
-            city: opt(e.city),
-            start: e.startDate,
-            end: e.endDate,
-            consultantCount: e.consultants,
-          })),
+          startingSoon: d.engagements.startingIn30Days.map(DM.dashboardEngagement),
           total: d.engagements.startingIn30DaysTotal ?? d.engagements.startingIn30Days.length,
         }
       : undefined,
@@ -556,23 +584,6 @@ export function dashboard(d: W.WDashboard): V.Dashboard {
           byTravelAgent: d.travel.byAgency.map(bucket),
         }
       : undefined,
-    travelCost: tc
-      ? {
-          total: tc.total,
-          invoices: tc.travelInvoices,
-          perDiems: tc.perDiems,
-          creditCards: tc.creditCardExpenses ?? undefined,
-          lastMonth: tc.lastMonth,
-          currentMonth: tc.currentMonth,
-          byMonth: tc.byMonth.map((m) => ({
-            month: m.month,
-            invoices: m.values["Travel Invoices"] ?? 0,
-            perDiems: m.values["Per Diems"] ?? 0,
-            creditCards: m.values["Credit Card Expenses"],
-          })),
-          byType: tc.byType.map(bucket),
-        }
-      : undefined,
     agency: d.agent
       ? {
           name: d.agent.agency,
@@ -584,15 +595,6 @@ export function dashboard(d: W.WDashboard): V.Dashboard {
           upcomingTotal: d.agent.upcomingTotal ?? d.agent.upcoming.length,
           invoicesByStatus: d.agent.invoicesByStatus.map(bucket),
           tripsByMonth: series(d.agent.tripsByMonth, "Trips"),
-          perDiemsOnOpenTrips: d.agent.perDiemsOnOpenTrips.map((p) => ({
-            jobNumber: p.jobNumber,
-            traveller: person(p.traveller),
-            start: s(p.startDate),
-            end: s(p.endDate),
-            days: p.days ?? 0,
-            currency: s(p.currency),
-            total: p.total ?? 0,
-          })),
         }
       : undefined,
   };
@@ -612,4 +614,5 @@ export const allocationsToday = (a: W.WAllocationsToday): V.AllocationsToday => 
 export const myOverview = (m: W.WMyOverview): V.MyOverview => ({
   allocations: m.upcomingAllocations.map(upcomingAllocation),
   trips: m.upcomingTrips.map(upcomingTrip),
+  tripVisas: m.tripVisas?.map(DM.tripVisa),
 });

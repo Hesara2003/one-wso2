@@ -17,11 +17,15 @@
 // Turns the backend's wire shapes into the UI's own types, so a change in the
 // backend's shape is felt here and in its tests, not on a screen.
 
-import { emptyDetails } from "../request-form/requestFormModel";
+import { emptyDetails, emptyEvent } from "../request-form/requestFormModel";
 import type {
+  Attachment,
   BudgetApproverOption,
   BudgetDetails,
   Choice,
+  EventDetails,
+  EventType,
+  PackageInclusion,
   ApprovalDecisionInput,
   ApprovalItem,
   Person,
@@ -29,7 +33,7 @@ import type {
   PurchaseRequest,
   PurchaseRequestInput,
   QueueItem,
-  RequestCategory,
+  ProcurementCategory,
   RequestStatus,
   RequestSummary,
   TeamLeadDecision,
@@ -37,27 +41,28 @@ import type {
   YesNo,
 } from "../types";
 import type {
-  BackendAnswer,
   BackendApprovalItem,
+  BackendAttachment,
   BackendNewDecision,
   BackendProcurementItem,
   BackendItDetails,
   BackendBudgetApprover,
   BackendCategory,
   BackendDirectoryUser,
+  BackendEventDetails,
   BackendEngagementOption,
   BackendNewRequest,
   BackendReferenceItem,
   BackendRequestDetail,
   BackendRequestSummary,
-  BackendSaasDetails,
+  BackendItAssessment,
   BackendStatus,
   BackendTeamLeadResult,
   BackendUser,
   BackendVendor,
 } from "./backendTypes";
 
-const CATEGORY: Record<BackendCategory, RequestCategory> = { IT: "IT", NON_IT: "NON-IT", MARKETING_EVENTS: "EVENTS" };
+const CATEGORY: Record<BackendCategory, ProcurementCategory> = { IT: "IT", NON_IT: "NON-IT", MARKETING_EVENTS: "EVENTS" };
 
 const STATUS: Record<BackendStatus, RequestStatus> = {
   DRAFT: "draft",
@@ -99,6 +104,17 @@ export function toMe(user: BackendUser, lead: BackendTeamLeadResult, signedIn: P
     approvalExempt: lead.approvalExempt,
   };
 }
+
+/** A file attached to a request, as the UI holds it. */
+export const toAttachment = (a: BackendAttachment): Attachment => ({
+  id: String(a.id),
+  name: a.fileName,
+  contentType: a.contentType,
+  sizeBytes: a.sizeBytes,
+  scanStatus: a.scanStatus.toLowerCase() as Attachment["scanStatus"],
+  uploadedBy: a.uploadedBy,
+  uploadedAt: a.uploadedOn,
+});
 
 export function toSummary(row: BackendRequestSummary): RequestSummary {
   return {
@@ -150,12 +166,6 @@ export function toNewDecision(input: ApprovalDecisionInput): BackendNewDecision 
 /** An answer the backend did not give stays unanswered; only an explicit true or false is a Yes or a No. */
 const yesNo = (value: boolean | undefined): YesNo | "" => (value === undefined ? "" : value ? "yes" : "no");
 
-/** The questions the backend keeps as free-form answers, because it has no field for them. */
-const ANSWER_PLAN = "plan";
-const ANSWER_USAGE_PERIOD = "usagePeriod";
-
-const answerOf = (answers: BackendAnswer[], key: string): string => answers.find((a) => a.questionKey === key)?.answer ?? "";
-
 /** A list of names or integrations the backend holds as one text, one per line, so a name can hold a comma. */
 const NAME_SEPARATOR = "\n";
 const toNames = (text: string): string[] => text.split(NAME_SEPARATOR).map((n) => n.trim()).filter(Boolean);
@@ -175,44 +185,36 @@ const orNull = (value: string): string | null => (value.trim() === "" ? null : v
 function toDetails(d: BackendRequestDetail) {
   const base = emptyDetails();
   const it = d.itDetails;
-  const saas = d.saasDetails;
+  const assessment = d.itAssessment;
   return {
     ...base,
     description: d.requirementDetails,
-    plan: answerOf(d.answers, ANSWER_PLAN),
-    usagePeriod: answerOf(d.answers, ANSWER_USAGE_PERIOD),
     businessJustification: d.businessJustification ?? "",
     roi: d.roi ?? "",
     specifications: d.additionalSpecifications ?? "",
     ...(it && {
       product: it.softwareName,
+      plan: it.planName,
+      softwareRequirement: it.softwareRequirement,
+      usagePeriod: it.usagePeriod,
       installationType: it.installationType,
-      licenseType: it.licenseType,
-      softwareUrl: it.softwareUrl,
-      pricingUrl: it.pricingUrl,
-      termsUrl: it.termsUrl,
-      privacyUrl: it.privacyUrl,
-      securityUrl: it.securityUrl,
-      urgent: yesNo(it.isUrgent ?? false),
-      urgencyJustification: it.urgencyJustification ?? "",
-      authorizedListChecked: it.authorizedListChecked ?? false,
-      legitimacyConfirmed: it.legitimacyConfirmed ?? false,
     }),
-    ...(saas && {
-      userCount: String(saas.userCount),
-      userNames: toNames(saas.userDetails),
-      adminCount: String(saas.adminCount),
-      adminNames: toNames(saas.adminDetails),
-      sensitiveData: yesNo(saas.handlesSensitiveData),
-      sensitiveDataDetail: saas.sensitiveDataDetails ?? "",
-      externalPii: yesNo(saas.handlesExternalPii),
-      externalPiiDetail: saas.externalPiiDetails ?? "",
-      employeePii: yesNo(saas.handlesEmployeePii),
-      employeePiiDetail: saas.employeePiiDetails ?? "",
-      integrates: yesNo(saas.integratesInternalSystems),
-      integrations: saas.integrationDetails ? integrationsFromText(saas.integrationDetails) : base.integrations,
-      vendorDocs: yesNo(Boolean(saas.vendorDocsLinks)),
-      vendorDocsLink: saas.vendorDocsLinks ?? "",
+    ...(assessment && {
+      userCount: String(assessment.userCount),
+      externalInteraction: yesNo(assessment.externalInteraction),
+      userNames: toNames(assessment.userDetails),
+      adminCount: String(assessment.adminCount),
+      adminNames: toNames(assessment.adminDetails),
+      sensitiveData: yesNo(assessment.handlesSensitiveData),
+      sensitiveDataDetail: assessment.sensitiveDataDetails ?? "",
+      externalPii: yesNo(assessment.handlesExternalPii),
+      externalPiiDetail: assessment.externalPiiDetails ?? "",
+      employeePii: yesNo(assessment.handlesEmployeePii),
+      employeePiiDetail: assessment.employeePiiDetails ?? "",
+      integrates: yesNo(assessment.integratesInternalSystems),
+      integrations: assessment.integrationDetails ? integrationsFromText(assessment.integrationDetails) : base.integrations,
+      vendorDocs: yesNo(Boolean(assessment.vendorDocsLinks)),
+      vendorDocsLink: assessment.vendorDocsLinks ?? "",
     }),
   };
 }
@@ -232,6 +234,87 @@ function toDecision(d: BackendRequestDetail): TeamLeadDecision {
     decidedAt: latest.decidedOn,
     decidedBy: latest.decidedBy,
     isOverride: latest.isOverride,
+  };
+}
+
+/** An amount, as the form holds it: text, blank when the backend has none. */
+const amountText = (value: number | null | undefined): string => (value === null || value === undefined ? "" : String(value));
+
+/** The event the backend holds, as the form's event: amounts as text, and the lines of one cost added up. */
+function toEvent(e: BackendEventDetails | null): EventDetails {
+  const base = emptyEvent();
+  if (!e) return base;
+  const costs = { ...base.costs };
+  const otherCosts: EventDetails["otherCosts"] = [];
+  for (const cost of e.costs ?? []) {
+    if (cost.category === "OTHER") {
+      otherCosts.push({ description: cost.description ?? "", amount: String(cost.amount) });
+    } else {
+      costs[cost.category] = String(Math.round(Number(costs[cost.category] || 0) * 100 + cost.amount * 100) / 100);
+    }
+  }
+  return {
+    ...base,
+    eventType: e.eventType as EventType,
+    shortlisted: yesNo(e.isShortlisted ?? false),
+    shortlistLineId: e.shortlistLineId ?? "",
+    name: e.eventName,
+    startDate: e.startDate,
+    endDate: e.endDate,
+    audience: e.audience,
+    packageName: e.packageName ?? "",
+    packageInclusions: (e.packageInclusions ?? []) as PackageInclusion[],
+    prospectusUrl: e.prospectusUrl ?? "",
+    costs,
+    otherCosts: otherCosts.length ? otherCosts : base.otherCosts,
+    partnerInvestmentPercent: e.partnerInvestmentPercent ? String(e.partnerInvestmentPercent) : "",
+    targetAccounts: amountText(e.targetAccountCount),
+    keyAccounts: e.keyAccounts ?? "",
+    newPipeline: amountText(e.newPipelineAmount),
+    roiCalculatorUrl: e.roiCalculatorUrl ?? "",
+    attendedBefore: e.attendedBefore === null || e.attendedBefore === undefined ? "" : yesNo(e.attendedBefore),
+    previousCost: amountText(e.previousCost),
+    previousPipeline: amountText(e.previousPipeline),
+    brandGoal: e.brandGoal ?? "",
+  };
+}
+
+/** The event the backend is sent: only for a Marketing & Events request, and only what its type and shortlist status are asked for. */
+function toBackendEvent(input: PurchaseRequestInput): BackendEventDetails | null {
+  if (input.category !== "EVENTS") return null;
+  const e = input.event;
+  const industry = e.eventType === "INDUSTRY_EVENT_SPONSORSHIP";
+  const shortlisted = e.shortlisted === "yes";
+  const asked = industry && !shortlisted;
+  const amount = (value: string): number | null => (value.trim() === "" ? null : Number(value));
+  return {
+    eventType: e.eventType as BackendEventDetails["eventType"],
+    isShortlisted: shortlisted,
+    shortlistLineId: shortlisted ? orNull(e.shortlistLineId) : null,
+    eventName: e.name.trim(),
+    startDate: e.startDate,
+    endDate: e.endDate,
+    audience: e.audience.trim(),
+    packageName: industry ? orNull(e.packageName) : null,
+    packageInclusions: industry ? e.packageInclusions : [],
+    prospectusUrl: industry ? orNull(e.prospectusUrl) : null,
+    partnerInvestmentPercent: e.partnerInvestmentPercent.trim() === "" ? 0 : Number(e.partnerInvestmentPercent),
+    targetAccountCount: shortlisted ? null : amount(e.targetAccounts),
+    keyAccounts: shortlisted ? null : orNull(e.keyAccounts),
+    newPipelineAmount: shortlisted ? null : amount(e.newPipeline),
+    roiCalculatorUrl: shortlisted ? null : orNull(e.roiCalculatorUrl),
+    attendedBefore: asked && e.attendedBefore !== "" ? e.attendedBefore === "yes" : null,
+    previousCost: asked && e.attendedBefore === "yes" ? amount(e.previousCost) : null,
+    previousPipeline: asked && e.attendedBefore === "yes" ? amount(e.previousPipeline) : null,
+    brandGoal: shortlisted ? null : orNull(e.brandGoal),
+    costs: [
+      ...(Object.entries(e.costs) as [keyof EventDetails["costs"], string][])
+        .filter(([, value]) => value.trim() !== "" && Number(value) > 0)
+        .map(([category, value]) => ({ category, amount: Number(value) })),
+      ...e.otherCosts
+        .filter((c) => c.amount.trim() !== "" && Number(c.amount) > 0)
+        .map((c) => ({ category: "OTHER" as const, description: orNull(c.description), amount: Number(c.amount) })),
+    ],
   };
 }
 
@@ -264,6 +347,7 @@ export function toRequest(d: BackendRequestDetail): PurchaseRequest {
     additionalApprovers: d.additionalApprovers,
     teamLeadDecision: toDecision(d),
     details: toDetails(d),
+    event: toEvent(d.eventDetails),
     vendors,
     budget,
     budgetApproverId: d.budgetApproverId === null ? "" : String(d.budgetApproverId),
@@ -275,26 +359,17 @@ export function toRequest(d: BackendRequestDetail): PurchaseRequest {
   };
 }
 
-/**
- * The body the backend saves a request from. What the backend has no field for (the plan
- * and the usage period) goes in as answers; the title is left for the backend to make.
- */
+/** The body the backend saves a request from. The title is left for the backend to make. */
 export function toNewRequest(input: PurchaseRequestInput): BackendNewRequest {
   const { details: d, budget: b } = input;
   const isIt = input.category === "IT";
-  const saas = isIt && d.installationType === "SAAS";
-  const answers: BackendAnswer[] = isIt
-    ? [
-        { questionKey: ANSWER_PLAN, answer: orNull(d.plan) },
-        { questionKey: ANSWER_USAGE_PERIOD, answer: orNull(d.usagePeriod) },
-      ].filter((a) => a.answer !== null)
-    : [];
-  const saasDetails: BackendSaasDetails | null = saas
+  const itAssessment: BackendItAssessment | null = isIt
     ? {
         userCount: Number(d.userCount),
         userDetails: d.userNames.join(NAME_SEPARATOR),
         adminCount: Number(d.adminCount),
         adminDetails: d.adminNames.join(NAME_SEPARATOR),
+        externalInteraction: d.externalInteraction === "yes",
         handlesSensitiveData: d.sensitiveData === "yes",
         sensitiveDataDetails: d.sensitiveData === "yes" ? orNull(d.sensitiveDataDetail) : null,
         handlesExternalPii: d.externalPii === "yes",
@@ -306,11 +381,12 @@ export function toNewRequest(input: PurchaseRequestInput): BackendNewRequest {
         vendorDocsLinks: d.integrates === "yes" && d.vendorDocs === "yes" ? orNull(d.vendorDocsLink) : null,
       }
     : null;
+  const isEvent = input.category === "EVENTS";
   return {
-    category: input.category === "IT" ? "IT" : "NON_IT",
-    requirementDetails: d.description.trim(),
-    businessJustification: orNull(d.businessJustification),
-    roi: orNull(d.roi),
+    category: input.category === "IT" ? "IT" : input.category === "EVENTS" ? "MARKETING_EVENTS" : "NON_IT",
+    requirementDetails: isEvent ? input.event.name.trim() : d.description.trim(),
+    businessJustification: isEvent ? null : orNull(d.businessJustification),
+    roi: isEvent ? null : orNull(d.roi),
     additionalSpecifications: input.category === "NON-IT" ? orNull(d.specifications) : null,
     salesforceCampaign: orNull(b.salesforceCampaign),
     notes: orNull(input.notes),
@@ -331,20 +407,14 @@ export function toNewRequest(input: PurchaseRequestInput): BackendNewRequest {
     itDetails: isIt
       ? {
           softwareName: d.product.trim(),
-          isUrgent: d.urgent === "yes",
-          urgencyJustification: d.urgent === "yes" ? orNull(d.urgencyJustification) : null,
+          planName: d.plan.trim(),
+          softwareRequirement: d.softwareRequirement.trim(),
+          usagePeriod: d.usagePeriod.trim(),
           installationType: d.installationType as BackendItDetails["installationType"],
-          licenseType: d.licenseType as BackendItDetails["licenseType"],
-          softwareUrl: d.softwareUrl.trim(),
-          pricingUrl: d.pricingUrl.trim(),
-          termsUrl: d.termsUrl.trim(),
-          privacyUrl: d.privacyUrl.trim(),
-          securityUrl: d.securityUrl.trim(),
-          authorizedListChecked: d.authorizedListChecked,
-          legitimacyConfirmed: d.legitimacyConfirmed,
         }
       : null,
-    saasDetails,
-    answers,
+    itAssessment,
+    eventDetails: toBackendEvent(input),
+    answers: [],
   };
 }

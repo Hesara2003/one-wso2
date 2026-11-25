@@ -14,11 +14,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { Box, Button, Checkbox, FormControlLabel, IconButton, Stack } from "@wso2/oxygen-ui";
+import { Box, Button, IconButton, Stack } from "@wso2/oxygen-ui";
 import { PlusIcon, XIcon } from "@wso2/oxygen-ui-icons-react";
 import type { RequestDetails } from "../types";
 import { ChipsField, SectionHeading, SelectField, StepTitle, TextInput, YesNoField, YesNoList } from "./formFields";
-import { detailsLabel, INSTALLATION_TYPES, LICENSE_TYPES, USAGE_PERIODS, type RequestDraft } from "./requestFormModel";
+import { detailsLabel, INSTALLATION_TYPES, USAGE_PERIODS, type RequestDraft } from "./requestFormModel";
 
 interface DetailsProps {
   details: RequestDetails;
@@ -29,7 +29,6 @@ const TWO_COLUMNS = { display: "grid", gap: 3, gridTemplateColumns: { xs: "1fr",
 
 const labelsOf = (choices: readonly { value: string; label: string }[]) => Object.fromEntries(choices.map((c) => [c.value, c.label]));
 const INSTALLATION_LABELS = labelsOf(INSTALLATION_TYPES);
-const LICENSE_LABELS = labelsOf(LICENSE_TYPES);
 
 const ROI_IT = "e.g. Replaces two tools (USD 18k/yr), saves ~10 hrs/week for the Sales team; payback within 6 months";
 const ROI_NON_IT = "e.g. Cuts annual facilities cost by 15%; pays back within the year";
@@ -42,7 +41,7 @@ function Justification({ details, onChange, roiPlaceholder }: Pick<DetailsProps,
         required
         multiline
         minRows={3}
-        label="Business justification"
+        label="Business justification" name="businessJustification"
         placeholder="Why is this purchase needed? What problem does it solve, and what happens if we don't buy it?"
         value={details.businessJustification}
         onChange={(businessJustification) => onChange({ businessJustification })}
@@ -64,7 +63,7 @@ function Assessment({ details, onChange }: Pick<DetailsProps, "details" | "onCha
       <SectionHeading>Data &amp; security assessment</SectionHeading>
       <YesNoList>
         <YesNoField
-          label="Will this platform store or process sensitive or confidential WSO2 data?"
+          label="Will this platform store or process sensitive or confidential Choreo Labs data?" name="sensitiveData"
           value={d.sensitiveData}
           onChange={(v) => onChange({ sensitiveData: v })}
         >
@@ -72,14 +71,14 @@ function Assessment({ details, onChange }: Pick<DetailsProps, "details" | "onCha
             required
             multiline
             minRows={2}
-            label="What sensitive or confidential WSO2 data will it store or process?"
+            label="What sensitive or confidential Choreo Labs data will it store or process?" name="sensitiveDataDetail"
             placeholder="e.g. source code, financial reports, customer contracts, pricing"
             value={d.sensitiveDataDetail}
             onChange={(sensitiveDataDetail) => onChange({ sensitiveDataDetail })}
           />
         </YesNoField>
         <YesNoField
-          label="Will this platform store or process external PII (customers, prospects, leads, or third parties)?"
+          label="Will this platform store or process external PII (customers, prospects, leads, or third parties)?" name="externalPii"
           value={d.externalPii}
           onChange={(v) => onChange({ externalPii: v })}
         >
@@ -87,14 +86,14 @@ function Assessment({ details, onChange }: Pick<DetailsProps, "details" | "onCha
             required
             multiline
             minRows={2}
-            label="What data would this include?"
+            label="What data would this include?" name="externalPiiDetail"
             placeholder="e.g. names, emails, phone numbers, payment details"
             value={d.externalPiiDetail}
             onChange={(externalPiiDetail) => onChange({ externalPiiDetail })}
           />
         </YesNoField>
         <YesNoField
-          label="Will this platform store or process internal employee PII?"
+          label="Will this platform store or process internal employee PII?" name="employeePii"
           value={d.employeePii}
           onChange={(v) => onChange({ employeePii: v })}
         >
@@ -102,14 +101,14 @@ function Assessment({ details, onChange }: Pick<DetailsProps, "details" | "onCha
             required
             multiline
             minRows={2}
-            label="What data would this include?"
+            label="What data would this include?" name="employeePiiDetail"
             placeholder="e.g. employee ID, payroll data, performance records"
             value={d.employeePiiDetail}
             onChange={(employeePiiDetail) => onChange({ employeePiiDetail })}
           />
         </YesNoField>
         <YesNoField
-          label="Will this integrate with WSO2 internal systems?"
+          label="Will this integrate with Choreo Labs internal systems?" name="integrates"
           value={d.integrates}
           onChange={(v) => onChange({ integrates: v })}
         >
@@ -118,7 +117,8 @@ function Assessment({ details, onChange }: Pick<DetailsProps, "details" | "onCha
               <Box sx={{ ...TWO_COLUMNS, flex: 1, minWidth: 0 }}>
                 <TextInput
                   required={index === 0}
-                  label="WSO2 system"
+                  label="Choreo Labs system"
+                  name={index === 0 ? "integrationSystem" : `integrationSystem.${index}`}
                   placeholder="e.g. Google Workspace, Salesforce, WSO2 IS"
                   value={row.system}
                   onChange={(system) => setIntegration(index, { system })}
@@ -145,13 +145,13 @@ function Assessment({ details, onChange }: Pick<DetailsProps, "details" | "onCha
           </Button>
           <YesNoField
             bare
-            label="Has the vendor provided guidelines / documentation on this integration?"
+            label="Has the vendor provided guidelines / documentation on this integration?" name="vendorDocs"
             value={d.vendorDocs}
             onChange={(v) => onChange({ vendorDocs: v })}
           >
             <TextInput
               required
-              label="Documentation link(s)"
+              label="Documentation link(s)" name="vendorDocsLink"
               placeholder="Paste link(s), separated by commas"
               value={d.vendorDocsLink}
               onChange={(vendorDocsLink) => onChange({ vendorDocsLink })}
@@ -165,83 +165,48 @@ function Assessment({ details, onChange }: Pick<DetailsProps, "details" | "onCha
 
 function ItDetails({ details, onChange }: DetailsProps) {
   const d = details;
-  const saas = d.installationType === "SAAS";
   return (
     <Stack spacing={2.5}>
       <SectionHeading first>Product</SectionHeading>
       <Box sx={TWO_COLUMNS}>
-        <TextInput required label="Product / solution name" placeholder="e.g. Salesforce, GitHub Enterprise" value={d.product} onChange={(product) => onChange({ product })} />
-        <TextInput required label="Plan / subscription tier" placeholder="e.g. Enterprise, Pro" value={d.plan} onChange={(plan) => onChange({ plan })} />
+        <TextInput required label="Product / solution name" name="product" placeholder="e.g. Salesforce, GitHub Enterprise" value={d.product} onChange={(product) => onChange({ product })} />
+        <TextInput required label="Plan / subscription tier" name="plan" maxLength={100} placeholder="e.g. Enterprise, Pro" value={d.plan} onChange={(plan) => onChange({ plan })} />
       </Box>
-      <TextInput required multiline minRows={3} label="Description of the product / solution" placeholder="What does it do, and how will WSO2 use it?" value={d.description} onChange={(description) => onChange({ description })} />
-      <Box sx={TWO_COLUMNS}>
-        <SelectField
-          required
-          label="Installation type"
-          options={INSTALLATION_TYPES.map((c) => c.value)}
-          labels={INSTALLATION_LABELS}
-          value={d.installationType}
-          onChange={(installationType) => onChange({ installationType: installationType as RequestDetails["installationType"] })}
-        />
-        <SelectField
-          required
-          label="Licence type"
-          options={LICENSE_TYPES.map((c) => c.value)}
-          labels={LICENSE_LABELS}
-          value={d.licenseType}
-          onChange={(licenseType) => onChange({ licenseType: licenseType as RequestDetails["licenseType"] })}
-        />
-      </Box>
-
-      <SectionHeading>Links</SectionHeading>
-      <Box sx={TWO_COLUMNS}>
-        <TextInput required label="Software link" placeholder="https://" value={d.softwareUrl} onChange={(softwareUrl) => onChange({ softwareUrl })} />
-        <TextInput required label="Pricing link" placeholder="https://" value={d.pricingUrl} onChange={(pricingUrl) => onChange({ pricingUrl })} />
-        <TextInput required label="Terms of service link" placeholder="https://" value={d.termsUrl} onChange={(termsUrl) => onChange({ termsUrl })} />
-        <TextInput required label="Privacy policy link" placeholder="https://" value={d.privacyUrl} onChange={(privacyUrl) => onChange({ privacyUrl })} />
-        <TextInput required label="Security / compliance link" placeholder="https://" value={d.securityUrl} onChange={(securityUrl) => onChange({ securityUrl })} />
-      </Box>
+      <TextInput required multiline minRows={3} label="Description of the product / solution" name="description" placeholder="What does it do, and how will Choreo Labs use it?" value={d.description} onChange={(description) => onChange({ description })} />
+      <TextInput required multiline minRows={3} label="What is the requirement to use this software" name="softwareRequirement" value={d.softwareRequirement} onChange={(softwareRequirement) => onChange({ softwareRequirement })} />
+      <SelectField
+        required
+        label="Installation type" name="installationType"
+        options={INSTALLATION_TYPES.map((c) => c.value)}
+        labels={INSTALLATION_LABELS}
+        value={d.installationType}
+        onChange={(installationType) => onChange({ installationType: installationType as RequestDetails["installationType"] })}
+      />
 
       <SectionHeading>Usage</SectionHeading>
-      <SelectField required label="Expected usage period" placeholder="Select duration" options={USAGE_PERIODS} value={d.usagePeriod} onChange={(usagePeriod) => onChange({ usagePeriod })} />
+      <SelectField required label="Expected usage period" name="usagePeriod" placeholder="Select duration" options={USAGE_PERIODS} value={d.usagePeriod} onChange={(usagePeriod) => onChange({ usagePeriod })} />
+
+      <SectionHeading>Users</SectionHeading>
+      <Box sx={TWO_COLUMNS}>
+        <Stack spacing={2.5}>
+          <TextInput required type="number" label="Number of users" name="userCount" placeholder="e.g. 25" value={d.userCount} onChange={(userCount) => onChange({ userCount })} />
+          <ChipsField required label="User names" name="userNames" placeholder="e.g. Jane Silva, Sales team" values={d.userNames} onChange={(userNames) => onChange({ userNames })} />
+        </Stack>
+        <Stack spacing={2.5}>
+          <TextInput required type="number" label="Number of administrators" name="adminCount" placeholder="e.g. 2" value={d.adminCount} onChange={(adminCount) => onChange({ adminCount })} />
+          <ChipsField required label="Administrator names" name="adminNames" placeholder="e.g. John Perera" values={d.adminNames} onChange={(adminNames) => onChange({ adminNames })} />
+        </Stack>
+      </Box>
       <YesNoList>
-        <YesNoField label="Is this request urgent?" value={d.urgent} onChange={(urgent) => onChange({ urgent })}>
-          <TextInput required multiline minRows={2} label="Why is it urgent?" value={d.urgencyJustification} onChange={(urgencyJustification) => onChange({ urgencyJustification })} />
-        </YesNoField>
+        <YesNoField
+          label="Do you expect customers/partners/prospects/external parties to interact with this platform once we get it?" name="externalInteraction"
+          value={d.externalInteraction}
+          onChange={(externalInteraction) => onChange({ externalInteraction })}
+        />
       </YesNoList>
 
-      {saas && (
-        <>
-          <SectionHeading>Users</SectionHeading>
-          <Box sx={TWO_COLUMNS}>
-            <Stack spacing={2.5}>
-              <TextInput required type="number" label="Number of users" placeholder="e.g. 25" value={d.userCount} onChange={(userCount) => onChange({ userCount })} />
-              <ChipsField required label="User names" placeholder="e.g. Jane Silva, Sales team" values={d.userNames} onChange={(userNames) => onChange({ userNames })} />
-            </Stack>
-            <Stack spacing={2.5}>
-              <TextInput required type="number" label="Number of administrators" placeholder="e.g. 2" value={d.adminCount} onChange={(adminCount) => onChange({ adminCount })} />
-              <ChipsField required label="Administrator names" placeholder="e.g. John Perera" values={d.adminNames} onChange={(adminNames) => onChange({ adminNames })} />
-            </Stack>
-          </Box>
-        </>
-      )}
-
       <Justification details={d} onChange={onChange} roiPlaceholder={ROI_IT} />
-      {saas && <Assessment details={d} onChange={onChange} />}
-
-      <SectionHeading>Confirmations</SectionHeading>
-      <Stack>
-        <FormControlLabel
-          required
-          control={<Checkbox checked={d.authorizedListChecked} onChange={(e) => onChange({ authorizedListChecked: e.target.checked })} />}
-          label="I have checked that this software is not already on the authorised software list."
-        />
-        <FormControlLabel
-          required
-          control={<Checkbox checked={d.legitimacyConfirmed} onChange={(e) => onChange({ legitimacyConfirmed: e.target.checked })} />}
-          label="I confirm that the vendor and the software are legitimate."
-        />
-      </Stack>
+      <Assessment details={d} onChange={onChange} />
     </Stack>
   );
 }
@@ -250,7 +215,7 @@ function NonItDetails({ details, onChange }: Pick<DetailsProps, "details" | "onC
   return (
     <Stack spacing={2.5}>
       <SectionHeading first>Goods or services</SectionHeading>
-      <TextInput required multiline minRows={3} label="Details of goods / services required" placeholder="Describe what's needed, including quantities, e.g. 40 ergonomic office chairs for the Colombo office" value={details.description} onChange={(description) => onChange({ description })} />
+      <TextInput required multiline minRows={3} label="Details of goods / services required" name="description" placeholder="Describe what's needed, including quantities, e.g. 40 ergonomic office chairs for the Colombo office" value={details.description} onChange={(description) => onChange({ description })} />
       <TextInput multiline minRows={2} label="Additional specifications or document links" placeholder="Any additional specifications, or links to spec sheets / vendor quotes, if available" value={details.specifications} onChange={(specifications) => onChange({ specifications })} />
       <Justification details={details} onChange={onChange} roiPlaceholder={ROI_NON_IT} />
     </Stack>

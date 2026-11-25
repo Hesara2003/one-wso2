@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Link, MemoryRouter, Route, Routes } from "react-router";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { emptyBudget, emptyDetails } from "../request-form/requestFormModel";
+import { emptyBudget, emptyDetails, emptyEvent } from "../request-form/requestFormModel";
 import type { ProcurementLookups, ProcurementMe, PurchaseRequest } from "../types";
 import RequestDetailPage from "./RequestDetailPage";
 
@@ -32,6 +32,7 @@ const state = vi.hoisted(() => {
     me: {} as Record<string, unknown>,
     lookups: {} as Record<string, unknown>,
     engagement: {} as Record<string, unknown>,
+    attachments: {} as Record<string, unknown>,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => void listeners.delete(listener);
@@ -51,6 +52,8 @@ vi.mock("../api/useProcurement", async () => {
     useDirectorySearch: () => ({ data: [], isFetching: false, isError: false, error: null }),
     useResubmitRequest: () => ({ isPending: false, isError: false, error: null, mutate: vi.fn() }),
     useCancelRequest: () => ({ isPending: false, isError: false, error: null, mutate: vi.fn() }),
+    useAttachments: () => useSyncExternalStore(state.subscribe, () => state.attachments),
+    useDownloadAttachment: () => ({ isPending: false, isError: false, error: null, mutate: vi.fn(), variables: undefined }),
   };
 });
 const person = { id: "lead@example.com", name: "Team Lead", email: "lead@example.com" };
@@ -70,6 +73,7 @@ const request = (id: string, patch: Partial<PurchaseRequest> = {}): PurchaseRequ
   additionalApprovers: [],
   teamLeadDecision: { decision: "rejected", notes: "Get a second quote.", decidedAt: "2026-11-03T08:00:00.000Z", decidedBy: "lead@example.com", isOverride: false },
   details: emptyDetails(),
+  event: emptyEvent(),
   vendors: [],
   budget: emptyBudget(),
   budgetApproverId: "",
@@ -99,6 +103,7 @@ beforeEach(() => {
   state.me = query(me);
   state.lookups = query(lookups);
   state.engagement = query([]);
+  state.attachments = query([]);
 });
 
 describe("RequestDetailPage", () => {
@@ -136,8 +141,8 @@ describe("RequestDetailPage", () => {
     renderAt(path);
     await user.click(screen.getByRole("button", { name: "Edit and resubmit" }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    await user.click(screen.getByRole("button", { name: /^Non-IT Related Procurement/ }));
-    expect(screen.getByRole("button", { name: /^Non-IT Related Procurement/ })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("radio", { name: /^Non-IT Related Procurement/ }));
+    expect(screen.getByRole("radio", { name: /^Non-IT Related Procurement/ })).toBeChecked();
 
     // A refresh fails, but the answer it held is still there.
     const refetch = vi.fn();
@@ -148,7 +153,7 @@ describe("RequestDetailPage", () => {
 
     expect(screen.getByText("Network down.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Procurement category" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Non-IT Related Procurement/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: /^Non-IT Related Procurement/ })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(refetch).toHaveBeenCalledOnce();
 
@@ -158,7 +163,26 @@ describe("RequestDetailPage", () => {
       state.notify();
     });
     expect(screen.queryByText("Network down.")).toBeNull();
-    expect(screen.getByRole("button", { name: /^Non-IT Related Procurement/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: /^Non-IT Related Procurement/ })).toBeChecked();
+  });
+
+  it("keeps the edit form and offers a Retry when refreshing the attachments fails after they were loaded", async () => {
+    const user = userEvent.setup();
+    renderAt("/me/procurement/requests/1");
+    await user.click(screen.getByRole("button", { name: "Edit and resubmit" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("radio", { name: /^Non-IT Related Procurement/ }));
+
+    const refetch = vi.fn();
+    act(() => {
+      state.attachments = { ...query([]), isError: true, error: new Error("Files unavailable."), refetch };
+      state.notify();
+    });
+
+    expect(screen.getByText("Files unavailable.")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^Non-IT Related Procurement/ })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledOnce();
   });
 
   it("warns that budget names did not load, keeps the codes, and retries only what failed", async () => {

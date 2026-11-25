@@ -17,7 +17,7 @@
 import { describe, expect, it } from "vitest";
 import type { Person, PurchaseRequestInput } from "../types";
 import type { BackendRequestDetail } from "./backendTypes";
-import { draftFromRequest, draftToInput, emptyDraft } from "../request-form/requestFormModel";
+import { draftFromRequest, draftToInput, emptyDraft, emptyEvent } from "../request-form/requestFormModel";
 import { toBudgetApprovers, toChoices, toEngagementChoices, toMe, toApprovalItem, toBackendStatus, toNewDecision, toNewRequest, toQueueItem, toRequest, toSummary } from "./backendMapping";
 
 const signedIn: Person = { id: "me@example.com", name: "Me Myself", email: "me@example.com" };
@@ -42,7 +42,8 @@ const detail = (patch: Partial<BackendRequestDetail> = {}): BackendRequestDetail
   salesforceCampaign: "Q4 launch",
   notes: "Needed by January.",
   vendors: [],
-  answers: [{ questionKey: "plan", answer: "Enterprise" }, { questionKey: "usagePeriod", answer: "1 year" }],
+  eventDetails: null,
+  answers: [],
   budgetCategoryCode: "CAT-1",
   businessUnitCode: "BU-2",
   productCode: null,
@@ -54,19 +55,12 @@ const detail = (patch: Partial<BackendRequestDetail> = {}): BackendRequestDetail
   additionalApprovers: ["other@example.com"],
   itDetails: {
     softwareName: "Figma",
-    isUrgent: true,
-    urgencyJustification: "The old licence ends Friday.",
+    planName: "Enterprise",
+    softwareRequirement: "Design and prototyping for the UX team",
+    usagePeriod: "1 year",
     installationType: "SAAS",
-    licenseType: "COMPANY",
-    softwareUrl: "https://www.figma.com",
-    pricingUrl: "https://www.figma.com/pricing",
-    termsUrl: "https://www.figma.com/terms",
-    privacyUrl: "https://www.figma.com/privacy",
-    securityUrl: "https://www.figma.com/security",
-    authorizedListChecked: true,
-    legitimacyConfirmed: true,
   },
-  saasDetails: null,
+  itAssessment: null,
   priority: null,
   assigneeEmail: null,
   collaborators: [],
@@ -96,7 +90,7 @@ describe("backend mapping", () => {
     expect(toRequest(detail({ category: "MARKETING_EVENTS" })).category).toBe("EVENTS");
   });
 
-  it("maps a detail: codes stay codes, the team lead is named by email, and the answers fill the plan and usage period", () => {
+  it("maps a detail: codes stay codes, the team lead is named by email, and the IT details fill the plan, requirement and usage period", () => {
     const r = toRequest(detail());
     expect(r).toMatchObject({
       id: "5",
@@ -115,16 +109,11 @@ describe("backend mapping", () => {
       description: "Design tool for the UX team.",
       product: "Figma",
       plan: "Enterprise",
+      softwareRequirement: "Design and prototyping for the UX team",
       usagePeriod: "1 year",
       roi: "Saves 10 hours a week.",
       businessJustification: "Replaces two tools.",
       installationType: "SAAS",
-      licenseType: "COMPANY",
-      softwareUrl: "https://www.figma.com",
-      urgent: "yes",
-      urgencyJustification: "The old licence ends Friday.",
-      authorizedListChecked: true,
-      legitimacyConfirmed: true,
     });
   });
 
@@ -143,15 +132,16 @@ describe("backend mapping", () => {
     expect(r.budgetApproverId).toBe("");
   });
 
-  it("reads the SaaS answers into the assessment, and nothing when there are none", () => {
+  it("reads the IT assessment answers into the form, and nothing when there are none", () => {
     expect(toRequest(detail()).details.sensitiveData).toBe("");
-    const saas = toRequest(
+    const assessment = toRequest(
       detail({
-        saasDetails: {
+        itAssessment: {
           adminCount: 2,
           adminDetails: "IT team\nSecurity",
           userCount: 40,
           userDetails: "Design team",
+          externalInteraction: true,
           handlesSensitiveData: false,
           handlesExternalPii: true,
           externalPiiDetails: "Customer names",
@@ -162,7 +152,7 @@ describe("backend mapping", () => {
         },
       }),
     ).details;
-    expect(saas).toMatchObject({
+    expect(assessment).toMatchObject({
       userCount: "40",
       userNames: ["Design team"],
       adminCount: "2",
@@ -205,14 +195,14 @@ describe("backend mapping", () => {
   });
 
   it("leaves an assessment answer unanswered when the backend omits it, and reads only an explicit true or false as Yes or No", () => {
-    const saas = { adminCount: 1, adminDetails: "IT", userCount: 5, userDetails: "Team" };
-    expect(toRequest(detail({ saasDetails: saas })).details).toMatchObject({
+    const assessment = { adminCount: 1, adminDetails: "IT", userCount: 5, userDetails: "Team" };
+    expect(toRequest(detail({ itAssessment: assessment })).details).toMatchObject({
       sensitiveData: "",
       externalPii: "",
       employeePii: "",
       integrates: "",
     });
-    expect(toRequest(detail({ saasDetails: { ...saas, handlesSensitiveData: false, handlesExternalPii: true } })).details).toMatchObject({
+    expect(toRequest(detail({ itAssessment: { ...assessment, handlesSensitiveData: false, handlesExternalPii: true } })).details).toMatchObject({
       sensitiveData: "no",
       externalPii: "yes",
       employeePii: "",
@@ -252,18 +242,11 @@ describe("the request the backend is sent", () => {
       product: "Figma",
       plan: "Enterprise",
       description: "Design tool",
+      softwareRequirement: "Design and prototyping for the product team",
       usagePeriod: "1 year",
       installationType: "SAAS",
-      licenseType: "COMPANY",
-      softwareUrl: "https://a.example.com",
-      pricingUrl: "https://b.example.com",
-      termsUrl: "https://c.example.com",
-      privacyUrl: "https://d.example.com",
-      securityUrl: "https://e.example.com",
-      urgent: "no",
       businessJustification: "Needed",
-      authorizedListChecked: true,
-      legitimacyConfirmed: true,
+      externalInteraction: "yes",
       userCount: "40",
       userNames: ["Design team", "Product"],
       adminCount: "2",
@@ -281,7 +264,7 @@ describe("the request the backend is sent", () => {
     return draftToInput(draft);
   };
 
-  it("sends an IT request with its software details, SaaS assessment, vendors and budget, and leaves the title to the backend", () => {
+  it("sends an IT request with its software details, IT assessment, vendors and budget, and leaves the title to the backend", () => {
     const body = toNewRequest(itInput());
     expect(body).toMatchObject({
       category: "IT",
@@ -292,8 +275,15 @@ describe("the request the backend is sent", () => {
       businessUnitCode: "BU-1",
       additionalApprovers: ["a@example.com"],
       vendors: [{ name: "Figma Inc", website: "https://figma.com", contactName: null }],
-      itDetails: { softwareName: "Figma", installationType: "SAAS", isUrgent: false, urgencyJustification: null, authorizedListChecked: true },
-      saasDetails: {
+      itDetails: {
+        softwareName: "Figma",
+        planName: "Enterprise",
+        softwareRequirement: "Design and prototyping for the product team",
+        usagePeriod: "1 year",
+        installationType: "SAAS",
+      },
+      itAssessment: {
+        externalInteraction: true,
         userCount: 40,
         userDetails: "Design team\nProduct",
         adminCount: 2,
@@ -306,10 +296,7 @@ describe("the request the backend is sent", () => {
       },
     });
     expect(body).not.toHaveProperty("title");
-    expect(body.answers).toEqual([
-      { questionKey: "plan", answer: "Enterprise" },
-      { questionKey: "usagePeriod", answer: "1 year" },
-    ]);
+    expect(body.answers).toEqual([]);
   });
 
   it("keeps a name that holds a comma as one name when the request is read back", () => {
@@ -341,12 +328,6 @@ describe("the request the backend is sent", () => {
     expect(read.details.adminNames).toEqual(["Smith, Sam"]);
   });
 
-  it("sends no SaaS details when the software is not installed as SaaS", () => {
-    const input = itInput();
-    input.details.installationType = "PLUGIN";
-    expect(toNewRequest(input).saasDetails).toBeNull();
-  });
-
   it("sends a Non-IT request without IT details or answers, with its specifications", () => {
     const draft = emptyDraft();
     draft.category = "NON-IT";
@@ -354,7 +335,7 @@ describe("the request the backend is sent", () => {
     draft.details.specifications = "Spec sheet";
     draft.details.plan = "ignored";
     const body = toNewRequest(draftToInput(draft));
-    expect(body).toMatchObject({ category: "NON_IT", requirementDetails: "40 chairs", additionalSpecifications: "Spec sheet", itDetails: null, saasDetails: null, answers: [], budgetApproverId: null });
+    expect(body).toMatchObject({ category: "NON_IT", requirementDetails: "40 chairs", additionalSpecifications: "Spec sheet", itDetails: null, itAssessment: null, answers: [], budgetApproverId: null });
   });
 
   it("reads back what it sent", () => {
@@ -430,5 +411,155 @@ describe("the Procurement queue", () => {
   it("reads nobody handling it, and the handling fields of a request", () => {
     expect(toQueueItem({ id: 8, referenceNo: null, title: "T", category: "IT", status: "APPROVED", version: 1, submittedOn: null, updatedOn: "x", priority: null, assigneeEmail: null, requesterName: "A", requesterEmail: "a@example.com" })).toMatchObject({ priority: null, assignee: "" });
     expect(toRequest(detail({ priority: "P2", assigneeEmail: "pat@example.com", collaborators: ["c@example.com"] }))).toMatchObject({ priority: "P2", assignee: "pat@example.com", collaborators: ["c@example.com"] });
+  });
+});
+
+describe("a Marketing & Events request", () => {
+  const eventInput = (patch: Partial<PurchaseRequestInput["event"]> = {}): PurchaseRequestInput => ({
+    ...draftToInput({
+      ...emptyDraft(),
+      category: "EVENTS",
+      event: {
+        ...emptyEvent(),
+        eventType: "INDUSTRY_EVENT_SPONSORSHIP",
+        shortlisted: "no",
+        name: " KubeCon ",
+        startDate: "2027-03-01",
+        endDate: "2027-03-03",
+        audience: "Platform engineers",
+        packageName: "Gold sponsor",
+        packageInclusions: ["BOOTH_SPACE"],
+        attendedBefore: "yes",
+        previousCost: "40000",
+        previousPipeline: "300000",
+        costs: { ...emptyEvent().costs, SPONSORSHIP_FEE: "60000", SWAG: "", PAYMENT_TO_PARTNER: "2000" },
+        otherCosts: [
+          { description: "Stickers", amount: "500.5" },
+          { description: "Lanyards", amount: "100" },
+          { description: "Nothing yet", amount: "" },
+        ],
+        partnerInvestmentPercent: "20",
+        targetAccounts: "10",
+        keyAccounts: "Acme",
+        newPipeline: "500000",
+        roiCalculatorUrl: "https://example.com/roi",
+        brandGoal: "Be known",
+        ...patch,
+      },
+    }),
+  });
+
+  it("is sent as MARKETING_EVENTS with the event and only the costs that were given", () => {
+    const body = toNewRequest(eventInput());
+    expect(body.category).toBe("MARKETING_EVENTS");
+    expect(body.requirementDetails).toBe("KubeCon");
+    expect(body.businessJustification).toBeNull();
+    expect(body.roi).toBeNull();
+    expect(body.vendors).toEqual([]);
+    expect(body.itDetails).toBeNull();
+    expect(body.eventDetails).toMatchObject({
+      eventType: "INDUSTRY_EVENT_SPONSORSHIP",
+      isShortlisted: false,
+      eventName: "KubeCon",
+      packageInclusions: ["BOOTH_SPACE"],
+      targetAccountCount: 10,
+      newPipelineAmount: 500000,
+      attendedBefore: true,
+      previousCost: 40000,
+      previousPipeline: 300000,
+      partnerInvestmentPercent: 20,
+      costs: [
+        { category: "SPONSORSHIP_FEE", amount: 60000 },
+        { category: "PAYMENT_TO_PARTNER", amount: 2000 },
+        { category: "OTHER", description: "Stickers", amount: 500.5 },
+        { category: "OTHER", description: "Lanyards", amount: 100 },
+      ],
+    });
+  });
+
+  it("leaves out what a shortlisted event is not asked for, earlier attendance included", () => {
+    const shortlisted = toNewRequest(eventInput({ shortlisted: "yes", shortlistLineId: "L-42" })).eventDetails;
+    expect(shortlisted).toMatchObject({
+      isShortlisted: true,
+      shortlistLineId: "L-42",
+      targetAccountCount: null,
+      newPipelineAmount: null,
+      roiCalculatorUrl: null,
+      brandGoal: null,
+      attendedBefore: null,
+      previousCost: null,
+      previousPipeline: null,
+    });
+  });
+
+  it("leaves out the sponsorship package and earlier attendance unless it is an industry sponsorship", () => {
+    const other = toNewRequest(eventInput({ eventType: "WSO2CON", prospectusUrl: "https://example.com/p" })).eventDetails;
+    expect(other).toMatchObject({
+      packageName: null,
+      packageInclusions: [],
+      prospectusUrl: null,
+      attendedBefore: null,
+      previousCost: null,
+      previousPipeline: null,
+    });
+  });
+
+  it("is read back into the form's event, with the other costs as their own lines", () => {
+    const request = toRequest(
+      detail({
+        category: "MARKETING_EVENTS",
+        eventDetails: {
+          eventType: "WSO2_SUMMIT",
+          isShortlisted: true,
+          shortlistLineId: "L-42",
+          eventName: "Summit",
+          startDate: "2027-05-01",
+          endDate: "2027-05-02",
+          audience: "Customers",
+          partnerInvestmentPercent: 30,
+          costs: [
+            { category: "SWAG", amount: 100 },
+            { category: "SWAG", amount: 20.5 },
+            { category: "PAYMENT_TO_PARTNER", amount: 999 },
+            { category: "OTHER", description: "Stickers", amount: 50 },
+            { category: "OTHER", description: "Lanyards", amount: 25.5 },
+          ],
+        },
+      }),
+    );
+    expect(request.category).toBe("EVENTS");
+    expect(request.event).toMatchObject({ eventType: "WSO2_SUMMIT", shortlisted: "yes", shortlistLineId: "L-42", name: "Summit", attendedBefore: "" });
+    expect(request.event.costs.SWAG).toBe("120.5");
+    expect(request.event.costs.PAYMENT_TO_PARTNER).toBe("999");
+    expect(request.event.costs.SPONSORSHIP_FEE).toBe("");
+    expect(request.event.otherCosts).toEqual([
+      { description: "Stickers", amount: "50" },
+      { description: "Lanyards", amount: "25.5" },
+    ]);
+    expect(request.event.partnerInvestmentPercent).toBe("30");
+  });
+
+  it("adds up several lines of one cost without leaving a fraction of a cent", () => {
+    const request = toRequest(
+      detail({
+        category: "MARKETING_EVENTS",
+        eventDetails: {
+          eventType: "WSO2CON",
+          eventName: "Con",
+          startDate: "2027-05-01",
+          endDate: "2027-05-02",
+          audience: "Customers",
+          costs: [
+            { category: "SWAG", amount: 0.07 },
+            { category: "SWAG", amount: 0.14 },
+          ],
+        },
+      }),
+    );
+    expect(request.event.costs.SWAG).toBe("0.21");
+  });
+
+  it("is an empty event when the request has none", () => {
+    expect(toRequest(detail()).event).toEqual(emptyEvent());
   });
 });

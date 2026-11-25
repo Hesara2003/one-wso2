@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { Box, Button, Card, CircularProgress, Stack, Typography } from "@wso2/oxygen-ui";
 import { ArrowLeftIcon, ExternalLinkIcon } from "@wso2/oxygen-ui-icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -136,11 +136,17 @@ export function NothingHere({
   label,
   icon: Icon,
   links = [],
+  heading,
+  children,
 }: {
   label: string;
   icon: React.ComponentType<{ size?: number }>;
   /** Visible rail rows that open other apps; listed, and the copy says only those are open. */
   links?: readonly PerspectiveSection[];
+  /** Replaces the card's heading. */
+  heading?: string;
+  /** Replaces the card's one-sentence body. */
+  children?: ReactNode;
 }): JSX.Element {
   return (
     <Card variant="outlined" sx={{ mt: 1.5, p: 3, maxWidth: 620 }}>
@@ -167,8 +173,11 @@ export function NothingHere({
             component="h2"
             sx={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.02em", mb: 0.6 }}
           >
-            {links.length ? "Only links to other apps here for you" : "Nothing here for you yet"}
+            {heading ?? (links.length ? "Only links to other apps here for you" : "Nothing here for you yet")}
           </Typography>
+          {children ? (
+            <Box sx={{ maxWidth: "52ch" }}>{children}</Box>
+          ) : (
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: "52ch" }}>
             {/* One sentence, the same one everywhere. Each perspective used to
                 add a line naming the system its access came from, and reading
@@ -188,9 +197,8 @@ export function NothingHere({
               </>
             )}
           </Typography>
-          {links.length ? (
-            <OutboundLinks links={links} />
-          ) : null}
+          )}
+          {links.length ? <OutboundLinks links={links} /> : null}
         </Box>
       </Box>
 

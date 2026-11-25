@@ -37,7 +37,9 @@ import { formatMoney } from "@features/sales/cado2/utils/money";
 import { useDebouncedValue } from "@hooks/useDebouncedValue";
 import { descriptionAfterName } from "@features/sales/cado2/utils/productDescription";
 import { lineProblems } from "@features/sales/cado2/quotes/components/lineProblems";
-import { usePricingFormulas, useProducts } from "@features/sales/cado2/quotes/api/useQuoteApi";
+import type { LinePrefill } from "@features/sales/cado2/quotes/form/opportunityImport";
+import { usePricingFormulas, usePricingPreview, useProducts } from "@features/sales/cado2/quotes/api/useQuoteApi";
+import { DiscountHint } from "@features/sales/cado2/quotes/components/sheet/OrderFormTable";
 import type {
   LineCategory,
   LineFormula,
@@ -248,9 +250,23 @@ interface AddLineDialogProps {
   readonly pricebook: PricebookRef;
   /** The contract year the line is in; its dates stay within it. Null before the start date. */
   readonly year: ContractYear | null;
+  /**
+   * A new line filled in from a renewal opportunity's Salesforce line, to
+   * change before adding (D178): its product fixed, its problems shown at once.
+   */
+  readonly prefill?: LinePrefill | null;
   readonly onSave: (line: LineValue) => void;
+  /**
+   * The live-pricing request with this line in the quote and where the line
+   * is in it, or null until the quote can be priced: for its volume discount
+   * ceiling while it's typed (D169). Without it, no ceiling is shown.
+   */
+  readonly previewFor?: (line: LineValue) => { body: object; at: number } | null;
   readonly onClose: () => void;
 }
+
+/** How long typing settles before the ceiling is looked up, as the quote's live pricing. */
+const CEILING_DEBOUNCE_MS = 500;
 
 const CATEGORIES = LINE_CATEGORIES;
 
@@ -270,30 +286,33 @@ export default function AddLineDialog({
   currency,
   pricebook,
   year,
+  prefill = null,
   onSave,
+  previewFor,
   onClose,
 }: AddLineDialogProps): JSX.Element {
   const [term, setTerm] = useState("");
   const debounced = useDebouncedValue(term, 300);
   // The quote's price book only, a page at a time as the rep scrolls.
   // Editing never searches: a line's product can't be changed, only removed (2026-10-12).
-  const products = useProducts(open && !line ? currency : "", debounced, pricebook.id);
+  const products = useProducts(open && !line && !prefill ? currency : "", debounced, pricebook.id);
   const options = products.data ?? [];
   const { state: listState, listboxProps } = useProductList(products, options.length);
 
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<Product | null>(prefill?.product ?? null);
   // The parent mounts the dialog afresh for each add/edit, so the line (or
   // blanks) only needs loading once.
   // Locked for now (2026-10-14): a saved line keeps its value; a new one has none.
-  const [quantity, setQuantity] = useState(line?.quantity ?? "1");
-  const [discount, setDiscount] = useState(line?.discount ?? "0");
+  const [quantity, setQuantity] = useState(line?.quantity ?? prefill?.quantity ?? "1");
+  const [discount, setDiscount] = useState(line?.discount ?? prefill?.discount ?? "0");
   // The unit price charged: "" = the list price.
-  const [salesPrice, setSalesPrice] = useState(line?.salesPrice ?? "");
-  const [tried, setTried] = useState(false);
+  const [salesPrice, setSalesPrice] = useState(line?.salesPrice ?? prefill?.salesPrice ?? "");
+  // A prefilled line shows what to change straight away (D178).
+  const [tried, setTried] = useState(Boolean(prefill));
   // A one-off line's dates within the year (D146), shown filled in: the
   // end follows the start until the AM picks one. A recurring line has none.
-  const [startDate, setStartDate] = useState(line?.startDate || year?.start || "");
-  const [pickedEnd, setEndDate] = useState(line?.endDate ?? "");
+  const [startDate, setStartDate] = useState(line?.startDate || prefill?.startDate || year?.start || "");
+  const [pickedEnd, setEndDate] = useState(line?.endDate ?? prefill?.endDate ?? "");
   const endDate = pickedEnd || startDate;
   const formulas = usePricingFormulas();
 
@@ -392,9 +411,11 @@ export default function AddLineDialog({
     setProduct(p);
   };
 
-  const save = () => {
-    setTried(true);
-    if (classificationProblem || Object.keys(problems).length > 0 || datesProblem || salesProblem) return;
+  // Whether the line as typed can be saved (or priced).
+  const valid = !classificationProblem && Object.keys(problems).length === 0 && !datesProblem && !salesProblem;
+
+  // The line as typed. Only called when valid: a new line has its product.
+  const toLine = (): LineValue => {
     const base: LineValue = keepsExisting
       ? { ...line }
       : {
@@ -432,8 +453,39 @@ export default function AddLineDialog({
       startDate: year && !recurring ? startDate : "",
       endDate: year && !recurring ? endDate : "",
     };
-    onSave(saved);
+    return saved;
   };
+
+  const save = () => {
+    setTried(true);
+    if (!valid) return;
+    onSave(toLine());
+  };
+
+  // D169: the line's volume discount ceiling while it's typed, from the same
+  // live pricing as the products table. Keyed on the request's text, so it's
+  // only asked again when the line changes; shown only for the line as it
+  // is now (never an earlier quantity's), and not on formula lines, whose
+  // discount says it's off the formula price.
+  const requestText = previewFor && valid && !formula ? JSON.stringify(previewFor(toLine())) : "null";
+  const settled = useDebouncedValue(requestText, CEILING_DEBOUNCE_MS);
+  const request = JSON.parse(settled) as { body: object; at: number } | null;
+  const ceilingPreview = usePricingPreview(request?.body ?? null);
+  const pricedLine =
+    request && settled === requestText && ceilingPreview.data?.kind === "priced" && !ceilingPreview.isPlaceholderData
+      ? ceilingPreview.data.preview.lines[request.at]
+      : undefined;
+  const hint =
+    pricedLine && pricedLine.pricebookEntryId === (keepsExisting ? line.pricebookEntryId : entry?.id)
+      ? {
+          discountPercent: String(Number(discount.trim() || "0")),
+          volumeCeilingPercent: pricedLine.volumeCeilingPercent ? String(Number(pricedLine.volumeCeilingPercent)) : null,
+          discretionaryPercent: pricedLine.discretionaryDiscountPercent
+            ? String(Number(pricedLine.discretionaryDiscountPercent))
+            : null,
+          formula: null,
+        }
+      : null;
 
   return (
     // A click outside doesn't throw the typed line away (2026-10-13); Cancel, X or Escape close it.
@@ -483,6 +535,7 @@ export default function AddLineDialog({
                 unitPrice={entry.unitPrice ?? ""}
                 currency={currency}
                 pricing={pricing}
+                note={prefill ? "From the opportunity in Salesforce." : undefined}
               />
             ) : null}
             {moveTo ? (
@@ -497,7 +550,7 @@ export default function AddLineDialog({
                 {moveTo.text} This line keeps the pricing it was saved with until you change it.
               </Alert>
             ) : null}
-            {line ? null : (
+            {line || prefill ? null : (
               <ProductListContext.Provider value={listState}>
                 <Autocomplete
                   options={options}
@@ -601,11 +654,16 @@ export default function AddLineDialog({
                 onChange={(e) => setDiscount(e.target.value)}
                 size="small"
                 error={Boolean(show("discount"))}
-                helperText={show("discount") ?? (formula ? "Off the formula price" : undefined)}
+                helperText={
+                  show("discount") ??
+                  (formula ? "Off the formula price" : hint ? <DiscountHint line={hint} align="start" /> : undefined)
+                }
                 slotProps={{
                   input: {
                     endAdornment: <InputAdornment position="end">%</InputAdornment>,
                   },
+                  // The ceiling hint is a block (D169).
+                  formHelperText: { component: "div" },
                 }}
               />
             </Stack>
