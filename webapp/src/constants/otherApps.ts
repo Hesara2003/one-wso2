@@ -452,6 +452,7 @@ function rowFor(app: OtherApp, urls: Readonly<Record<string, string>>): Perspect
         window.open(url, "_blank", "noopener,noreferrer");
       },
       opensInNewTab: true,
+      outboundUrl: url,
     },
   ];
 }
