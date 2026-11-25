@@ -58,7 +58,7 @@ import {
   useAmplifyEditorAccess,
 } from "@features/amplify/api/useAmplifyEditorAccess";
 import { isSriLankaWorkLocation } from "@utils/locationGate";
-import { firstVisibleLeaf as firstVisibleLeafOf, visibleLeavesOf } from "./railActive";
+import { firstVisibleLeaf as firstVisibleLeafOf, visibleLeavesOf, visibleOutboundRowsOf } from "./railActive";
 import {
   claimOf,
   claimsForPerspective,
@@ -119,6 +119,8 @@ export interface PerspectiveVisibility {
    * and a direct address do not read this field.
    */
   firstVisibleLeaf: PerspectiveSection | undefined;
+  /** Visible rows that open another site in a new tab (see `visibleOutboundRowsOf`). */
+  visibleOutbound: PerspectiveSection[];
   /**
    * True when something this perspective needed to answer the question failed.
    *
@@ -417,6 +419,7 @@ export function usePerspectiveVisibility(): PerspectiveVisibility {
     isResolving: folded.resolving,
     visibleLeaves,
     firstVisibleLeaf,
+    visibleOutbound: visibleOutboundRowsOf(sections, resolveVisible),
     isError: folded.failed,
     error: folded.error,
     retry: folded.retry,
