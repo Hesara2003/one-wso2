@@ -98,6 +98,17 @@ export default function PerspectiveLanding(): JSX.Element {
         <ErrorNotice onRetry={retry} error={error} sx={{ mt: 1.5 }}>
           Couldn&apos;t work out what you can open in {active.label}.
         </ErrorNotice>
+        {/* A failed check is about this app's own screens; the rail's links to
+            other apps do not depend on it and stay shown there, so they stay
+            reachable here too. */}
+        {visibleOutbound?.length ? (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              These open other WSO2 apps in a new tab.
+            </Typography>
+            <OutboundLinks links={visibleOutbound} />
+          </Box>
+        ) : null}
       </Box>
     );
   }
