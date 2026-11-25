@@ -221,40 +221,45 @@ function OutboundLinks({ links }: { links: readonly PerspectiveSection[] }): JSX
   const queryClient = useQueryClient();
   return (
     <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, mt: 1.5, display: "flex", flexWrap: "wrap", gap: 1 }}>
-      {links.map((row) => (
-        <Box component="li" key={row.id}>
-          {row.externalUrl ? (
-            <Button
-              component="a"
-              href={row.externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              variant="outlined"
-              size="small"
-              endIcon={<ExternalLinkIcon size={13} aria-hidden />}
-              sx={{ textTransform: "none" }}
-            >
-              {row.label}
-              <Box component="span" sx={VISUALLY_HIDDEN_SX}>
-                (opens in a new tab)
-              </Box>
-            </Button>
-          ) : (
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => row.onSelect?.({ queryClient })}
-              endIcon={<ExternalLinkIcon size={13} aria-hidden />}
-              sx={{ textTransform: "none" }}
-            >
-              {row.label}
-              <Box component="span" sx={VISUALLY_HIDDEN_SX}>
-                (opens in a new tab)
-              </Box>
-            </Button>
-          )}
-        </Box>
-      ))}
+      {links.map((row) => {
+        // A known address is a real link (copy, middle-click, context menu);
+        // only a destination resolved at runtime is a button running the action.
+        const href = row.externalUrl ?? row.outboundUrl;
+        return (
+          <Box component="li" key={row.id}>
+            {href ? (
+              <Button
+                component="a"
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="outlined"
+                size="small"
+                endIcon={<ExternalLinkIcon size={13} aria-hidden />}
+                sx={{ textTransform: "none" }}
+              >
+                {row.label}
+                <Box component="span" sx={VISUALLY_HIDDEN_SX}>
+                  (opens in a new tab)
+                </Box>
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => row.onSelect?.({ queryClient })}
+                endIcon={<ExternalLinkIcon size={13} aria-hidden />}
+                sx={{ textTransform: "none" }}
+              >
+                {row.label}
+                <Box component="span" sx={VISUALLY_HIDDEN_SX}>
+                  (opens in a new tab)
+                </Box>
+              </Button>
+            )}
+          </Box>
+        );
+      })}
     </Box>
   );
 }
