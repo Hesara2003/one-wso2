@@ -1497,7 +1497,7 @@ export function otherAppDirectoryEntries(
     if (!href) return [];
     const opens = app.vpnOnly ? `${OPENS_IN_NEW_TAB_HINT}; ${VPN_ONLY_HINT}` : OPENS_IN_NEW_TAB_HINT;
     // A tool linked from its own rail group has a label worded for that group
-    // ("Open Sales Pitstop"); on its own, its marketplace name reads better.
+    // ("Sales Pitstop App"); on its own, its marketplace name reads better.
     const name = app.inOwnGroup ? app.marketplaceName : app.label;
     return [
       {
