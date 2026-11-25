@@ -31,6 +31,7 @@ const visibility: { current: PerspectiveVisibility } = {
     isResolving: false,
     visibleLeaves: [],
     firstVisibleLeaf: undefined,
+    visibleOutbound: [],
     isError: false,
     retry: () => {},
   },
@@ -46,7 +47,8 @@ vi.mock("@context/perspective/PerspectiveContext", () => ({
   useActivePerspective: () => perspective.current,
 }));
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import PerspectiveLanding from "./PerspectiveLanding";
@@ -83,6 +85,7 @@ beforeEach(() => {
     isResolving: false,
     visibleLeaves: [],
     firstVisibleLeaf: undefined,
+    visibleOutbound: [],
     isError: false,
     retry: () => {},
   };
@@ -191,7 +194,46 @@ describe("a perspective landing that forwards to the first item", () => {
     expect(retry).toHaveBeenCalled();
   });
 
-  // The same sentence for every perspective, naming only the one it is on.
+  // The rail can show links to other apps (they never become a landing's
+  // destination). The card offers them instead of saying nothing is open.
+  it("offers the rail's links to other apps instead of saying nothing is open", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    visibility.current = {
+      ...visibility.current,
+      visibleOutbound: [
+        { id: "other-app-site", label: "Team Site", externalUrl: "https://site.example" },
+        {
+          id: "other-app-tool",
+          label: "Tool",
+          opensInNewTab: true,
+          onSelect: () => {
+            window.open("https://tool.example", "_blank", "noopener,noreferrer");
+          },
+        },
+      ],
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={["/security"]}>
+          <Routes>
+            <Route path="/security" element={<PerspectiveLanding />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByText("Nothing here for you yet")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Only links to other apps here for you" })).toBeInTheDocument();
+    const list = screen.getByRole("list");
+    const site = within(list).getByRole("link", { name: /Team Site/ });
+    expect(site).toHaveAttribute("href", "https://site.example");
+    expect(site).toHaveAttribute("target", "_blank");
+    await userEvent.click(within(list).getByRole("button", { name: /Tool/ }));
+    expect(open).toHaveBeenCalledWith("https://tool.example", "_blank", "noopener,noreferrer");
+    open.mockRestore();
+  });
+
+  // The same sentence for every perspective, naming only the one it is on.  // The same sentence for every perspective, naming only the one it is on.
   it("names the perspective and nothing else", () => {
     perspective.current = { ...perspective.current, key: "finance", label: "Finance" };
     renderLanding();
