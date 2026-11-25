@@ -173,7 +173,7 @@ export const OTHER_APPS: readonly OtherApp[] = [
   },
   {
     id: "sales-pitstop",
-    label: "Open Sales Pitstop",
+    label: "Sales Pitstop App",
     marketplaceName: "Sales Pitstop",
     hint: "The Sales Pitstop hub",
     keywords: ["pitstop", "sales pitstop", "sales hub"],
