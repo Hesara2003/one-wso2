@@ -105,7 +105,8 @@ describe("searchDirectories", () => {
     ["Expense Claims App", "fin-expenses"],
     ["Credit Card Expenses", "fin-cc"],
     ["Product Download Stats - GitHub", "eng-downloads"],
-    ["GITHUB - Repo Creation Request", "infra-portal"],
+    ["GITHUB - Repo Creation Request", "infra-requests"],
+    ["repo creation request", "infra-requests"],
     ["Infra Portal", "infra-portal"],
   ])("finds the One WSO2 screen for the marketplace app %s", (name, id) => {
     expect(searchDirectories(name, ALL_CAPS)[0]?.id).toBe(id);
