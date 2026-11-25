@@ -203,11 +203,18 @@ describe("a perspective landing that forwards to the first item", () => {
       visibleOutbound: [
         { id: "other-app-site", label: "Team Site", externalUrl: "https://site.example" },
         {
-          id: "other-app-tool",
-          label: "Tool",
+          id: "other-app-repo",
+          label: "Repo",
+          opensInNewTab: true,
+          outboundUrl: "https://repo.example",
+          onSelect: () => {},
+        },
+        {
+          id: "docs",
+          label: "Docs",
           opensInNewTab: true,
           onSelect: () => {
-            window.open("https://tool.example", "_blank", "noopener,noreferrer");
+            window.open("https://docs.example", "_blank", "noopener,noreferrer");
           },
         },
       ],
@@ -228,8 +235,13 @@ describe("a perspective landing that forwards to the first item", () => {
     const site = within(list).getByRole("link", { name: /Team Site/ });
     expect(site).toHaveAttribute("href", "https://site.example");
     expect(site).toHaveAttribute("target", "_blank");
-    await userEvent.click(within(list).getByRole("button", { name: /Tool/ }));
-    expect(open).toHaveBeenCalledWith("https://tool.example", "_blank", "noopener,noreferrer");
+    // A grouped app with a known address is a real link too, not a button.
+    const repo = within(list).getByRole("link", { name: /Repo/ });
+    expect(repo).toHaveAttribute("href", "https://repo.example");
+    expect(repo).toHaveAttribute("target", "_blank");
+    // Only a destination resolved at runtime is a button running its action.
+    await userEvent.click(within(list).getByRole("button", { name: /Docs/ }));
+    expect(open).toHaveBeenCalledWith("https://docs.example", "_blank", "noopener,noreferrer");
     open.mockRestore();
   });
 
