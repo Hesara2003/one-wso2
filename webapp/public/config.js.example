@@ -196,7 +196,7 @@ window.config = {
   //   // People Ops
   //   "people-app": "<url>", "hr-site": "<url>",
   //   // Finance
-  //   allocations: "<url>", netsuite: "<url>", "msl-payslip": "<url>", travel: "<url>",
+  //   netsuite: "<url>", "msl-payslip": "<url>",
   //   // Sales
   //   salesforce: "<url>", "sales-pitstop": "<url>", "sales-insights-dashboard": "<url>",
   //   // Customer Success
