@@ -73,12 +73,12 @@ describe("otherAppsSections", () => {
 
   it("makes an app with no group an item of its own: a link, in registry order", () => {
     const sections = otherAppsSections("finance", {
+      "msl-payslip": "https://payslip.example",
       netsuite: "https://netsuite.example",
-      allocations: "https://allocations.example",
     });
     expect(sections).toEqual([
       expect.objectContaining({ id: "other-app-netsuite", label: "NetSuite", externalUrl: "https://netsuite.example" }),
-      expect.objectContaining({ id: "other-app-allocations", label: "Allocations", externalUrl: "https://allocations.example" }),
+      expect.objectContaining({ id: "other-app-msl-payslip", externalUrl: "https://payslip.example" }),
     ]);
     for (const section of sections) {
       expect(section.children).toBeUndefined();
@@ -169,15 +169,9 @@ describe("the registry", () => {
     expect(OTHER_APPS.find((app) => app.id === "people-app")?.perspective).toBe("people");
   });
 
-  it("keeps NetSuite, Allocations and Travel together in Finance, in that order", () => {
-    const finance = OTHER_APPS.filter((app) => app.perspective === "finance").map((app) => app.id);
-    expect(finance.slice(0, 3)).toEqual(["netsuite", "allocations", "travel"]);
-  });
-
   it("puts each app under its domain", () => {
     const perspectiveOf = (id: string) => OTHER_APPS.find((app) => app.id === id)?.perspective;
     expect(perspectiveOf("msl-payslip")).toBe("finance");
-    expect(perspectiveOf("travel")).toBe("finance");
     expect(perspectiveOf("hr-site")).toBe("people");
     expect(perspectiveOf("sa-site")).toBe("engineering");
     for (const id of ["explorecs", "cs-tools", "cs-tooling-site"]) expect(perspectiveOf(id), id).toBe("customer-success");
@@ -191,6 +185,12 @@ describe("the registry", () => {
     for (const retired of ["github-committership-form", "support-portal-lite", "vpn-qr-code"]) {
       expect(ids).not.toContain(retired);
     }
+  });
+
+  it("links neither Allocations nor Travel, which One WSO2 now hosts as the Engagement App", () => {
+    const ids = OTHER_APPS.map((app) => app.id);
+    expect(ids).not.toContain("allocations");
+    expect(ids).not.toContain("travel");
   });
 
   it("gives every group a label and at least one app", () => {
