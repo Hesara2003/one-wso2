@@ -38,18 +38,18 @@ describe("otherAppDirectoryEntries", () => {
   });
 
   it("opens each configured tool in a new tab, under its perspective's category", () => {
-    const [travel] = otherAppDirectoryEntries({ travel: "https://travel.example" });
-    expect(travel).toMatchObject({
-      id: "other-app-travel",
-      title: "Travel",
-      label: "Open Travel",
-      href: "https://travel.example",
+    const [netsuite] = otherAppDirectoryEntries({ netsuite: "https://netsuite.example" });
+    expect(netsuite).toMatchObject({
+      id: "other-app-netsuite",
+      title: "NetSuite",
+      label: "Open NetSuite",
+      href: "https://netsuite.example",
       category: "Finance",
       isExternal: true,
       hasWebApp: true,
-      hint: "The Travel App. Opens in a new tab.",
+      hint: "The finance system. Opens in a new tab.",
     });
-    expect(travel.keywords).toEqual(expect.arrayContaining(["travel", "travel app"]));
+    expect(netsuite.keywords).toEqual(expect.arrayContaining(["netsuite", "erp"]));
   });
 
   it("says a VPN-only tool needs the VPN", () => {
@@ -76,12 +76,16 @@ describe("searchDirectories", () => {
   it("finds a configured marketplace tool by its marketplace name", async () => {
     window.config = {
       ...(originalConfig ?? {}),
-      ONE_WSO2_OTHER_APP_URLS: { "msl-payslip": "https://payslip.example", travel: "https://travel.example" },
+      ONE_WSO2_OTHER_APP_URLS: {
+        "msl-payslip": "https://payslip.example",
+        "security-compliance-site": "https://security-site.example",
+      },
     } as Window["config"];
     vi.resetModules();
     const fresh = await import("./directoryCatalog");
     expect(fresh.searchDirectories("MSL Payslip Viewer", ALL_CAPS)[0]?.id).toBe("other-app-msl-payslip");
-    expect(fresh.searchDirectories("travel app", ALL_CAPS)[0]?.id).toBe("other-app-travel");
+    // Labelled differently in One WSO2, still found by its marketplace name.
+    expect(fresh.searchDirectories("Security & Compliance Portal", ALL_CAPS)[0]?.id).toBe("other-app-security-compliance-site");
   });
 
   it("does not offer a tool whose address is not configured", async () => {
