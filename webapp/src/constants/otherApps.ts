@@ -17,7 +17,6 @@
 import { otherAppUrls } from "@config/apiConfig";
 import {
   BookUserIcon,
-  CalendarRangeIcon,
   ChartLineIcon,
   ClipboardListIcon,
   CloudIcon,
@@ -33,7 +32,6 @@ import {
   LandmarkIcon,
   PackageIcon,
   PackagePlusIcon,
-  PlaneIcon,
   PlugIcon,
   PrinterIcon,
   ReceiptTextIcon,
@@ -133,24 +131,6 @@ export const OTHER_APPS: readonly OtherApp[] = [
     keywords: ["netsuite", "erp"],
     perspective: "finance",
     icon: LandmarkIcon,
-  },
-  {
-    id: "allocations",
-    label: "Allocations",
-    marketplaceName: "Allocations App",
-    hint: "The Allocations App",
-    keywords: ["allocation", "allocations app"],
-    perspective: "finance",
-    icon: CalendarRangeIcon,
-  },
-  {
-    id: "travel",
-    label: "Travel",
-    marketplaceName: "Travel App",
-    hint: "The Travel App",
-    keywords: ["travel", "trip", "travel request"],
-    perspective: "finance",
-    icon: PlaneIcon,
   },
   {
     id: "msl-payslip",
