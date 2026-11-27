@@ -1372,7 +1372,7 @@ export const DIRECTORY_CATALOG: readonly DirectoryEntry[] = [
     hint: "Access enterprise customer support tickets, SLA tracking, and accounts",
     href: csmUrl,
     icon: LifeBuoyIcon,
-    category: "Support",
+    category: "Customer Success",
     tags: ["CSM", "Support", "Customer Success", "Tickets", "Accounts", "Helpdesk"],
     hasWebApp: true,
     isExternal: true,
@@ -1494,7 +1494,8 @@ export function otherAppDirectoryEntries(
 ): DirectoryEntry[] {
   return OTHER_APPS.flatMap((app) => {
     const href = urls[app.id];
-    if (!href) return [];
+    // An app with an entry of its own (the CSM portal) is not listed twice.
+    if (!href || app.ownSearchEntry) return [];
     const opens = app.vpnOnly ? `${OPENS_IN_NEW_TAB_HINT}; ${VPN_ONLY_HINT}` : OPENS_IN_NEW_TAB_HINT;
     // A tool linked from its own rail group has a label worded for that group
     // ("Sales Pitstop App"); on its own, its marketplace name reads better.
