@@ -17,7 +17,7 @@
 // Central perspective registry. The waffle switcher and left rail both read
 // from this — one edit here changes every entry point.
 
-import { csmUrl, isCsmConfigured, isIsacConfigured, isacUrl } from "@config/apiConfig";
+import { isIsacConfigured, isacUrl } from "@config/apiConfig";
 import { isPreviewEnabled } from "@config/previewFeatures";
 import { CADO2_APPS } from "@constants/cado2Apps";
 import { ENGAGEMENT_APPS, MY_ENGAGEMENT_APPS } from "@constants/engagementApps";
@@ -36,7 +36,6 @@ import {
   HouseIcon,
   LandmarkIcon,
   HeartHandshakeIcon,
-  LifeBuoyIcon,
   LightbulbIcon,
   LayoutDashboard,
   LucideLayoutGrid,
@@ -895,20 +894,11 @@ export const PERSPECTIVES: readonly PerspectiveDef[] = [
       ...appsToSections(DUE_DILIGENCE_APPS),
     ],
   },
-  // A separate application, opened in a new tab. `access` follows the URL being
-  // configured: without one the tile stays in its unbuilt state rather than
-  // becoming a link to nowhere.
-  {
-    key: "csm",
-    label: "CSM",
-    icon: LifeBuoyIcon,
-    access: isCsmConfigured(),
-    externalUrl: csmUrl || undefined,
-  },
-  // Customer Success — the CS team's own sites, which live outside One WSO2.
+  // Customer Success — the CSM portal and the CS team's own sites, all of which
+  // live outside One WSO2 (the CSM portal used to be a launcher tile of its own).
   // Every row is a link that opens in a new tab, so the landing lists them
   // rather than forwarding (it has nothing in-app to forward to). Offered only
-  // once at least one of its sites has an address.
+  // once at least one of them has an address.
   {
     key: "customer-success",
     label: "Customer Success",
