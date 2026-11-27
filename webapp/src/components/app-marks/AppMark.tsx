@@ -219,26 +219,6 @@ export function SalesMark({ size }: MarkProps) {
   );
 }
 
-/** CSM — a life buoy: ring plus four spokes. */
-export function CsmMark({ size }: MarkProps) {
-  const t = appMarkTones("csm")!;
-  return (
-    <Svg size={size}>
-      <path
-        fillRule="evenodd"
-        d="M24 5.5A18.5 18.5 0 1 0 24 42.5 18.5 18.5 0 0 0 24 5.5zm0 10.5a8 8 0 1 1 0 16 8 8 0 0 1 0-16z"
-        fill={t.field}
-      />
-      <g fill={t.lead}>
-        <rect x="21.6" y="2.5" width="4.8" height="12" rx="2.4" />
-        <rect x="21.6" y="33.5" width="4.8" height="12" rx="2.4" />
-        <rect x="2.5" y="21.6" width="12" height="4.8" rx="2.4" />
-        <rect x="33.5" y="21.6" width="12" height="4.8" rx="2.4" />
-      </g>
-    </Svg>
-  );
-}
-
 /**
  * Legal — scales of justice, traced from the same silhouette as the rail's
  * line icon (lucide's Scale, scaled 2x for this 48-unit grid) rather than
