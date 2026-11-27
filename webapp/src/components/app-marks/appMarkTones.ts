@@ -65,7 +65,6 @@ export const APP_MARK_TONES: Record<string, AppMarkTones> = {
   people: { field: "#9BC9F0", lead: "#2E8FE0", detail: "#2675B8" },
   finance: { field: "#95D3C1", lead: "#22A37D", detail: "#1C8666" },
   marketing: { field: "#F0A8C9", lead: "#E04A8F", detail: "#B83D75" },
-  csm: { field: "#CFB1F0", lead: "#9B5DE0", detail: "#7F4CB8" },
   legal: { field: "#B8C6F0", lead: "#6C89E0", detail: "#5970B8" },
   // Derived by the same rule as the six above it, from Security's own
   // PERSPECTIVE_HUES entry: field is the hue 50% toward white, detail is the
