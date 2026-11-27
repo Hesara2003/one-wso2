@@ -29,6 +29,7 @@ import {
   GlobeIcon,
   HammerIcon,
   KeyRoundIcon,
+  LifeBuoyIcon,
   LandmarkIcon,
   PackageIcon,
   PackagePlusIcon,
@@ -95,6 +96,11 @@ export interface OtherApp {
    * so `otherAppsSections` leaves it out.
    */
   inOwnGroup?: boolean;
+  /**
+   * Ask Novera search already has its own entry for this app (the CSM portal's
+   * "Customer Success Management (CSM)"), so `otherAppDirectoryEntries` adds none.
+   */
+  ownSearchEntry?: boolean;
 }
 
 /** Text appended to the label of an app reachable only on the VPN. */
@@ -171,6 +177,18 @@ export const OTHER_APPS: readonly OtherApp[] = [
     icon: ChartLineIcon,
   },
 
+  {
+    // Its address is ONE_WSO2_CSM_URL (see otherAppUrls), not an entry of
+    // ONE_WSO2_OTHER_APP_URLS. It used to be a launcher tile of its own.
+    id: "csm",
+    label: "CSM Portal",
+    marketplaceName: "CSM",
+    hint: "The Customer Success Management portal",
+    keywords: ["csm", "csm portal", "customer success management"],
+    perspective: "customer-success",
+    icon: LifeBuoyIcon,
+    ownSearchEntry: true,
+  },
   {
     id: "explorecs",
     label: "ExploreCS",
