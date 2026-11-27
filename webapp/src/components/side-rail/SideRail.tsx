@@ -268,15 +268,16 @@ export default function SideRail({ collapsed }: SideRailProps): JSX.Element {
     for (const s of sections) {
       if (s.onSelect) map.set(s.id, s.onSelect);
       for (const c of s.children ?? []) {
-        // A row with a known address is a real link (see the nested row
-        // below); running its action too would open the site twice.
-        if (c.onSelect && !c.outboundUrl) map.set(c.id, c.onSelect);
+        // Kept for link rows too: the collapsed rail's flyout draws a row
+        // without its link and only reports the selection (see onSelect).
+        if (c.onSelect) map.set(c.id, c.onSelect);
       }
     }
     return map;
   }, [sections]);
 
-  // Nested rows whose address is known ahead (a linked app): drawn as anchors.
+  // Nested rows whose address is known ahead (a linked app): drawn as anchors
+  // in the expanded rail.
   const linkIds = useMemo(
     () => new Set(sections.flatMap((s) => (s.children ?? []).filter((c) => c.outboundUrl).map((c) => c.id))),
     [sections],
@@ -297,8 +298,10 @@ export default function SideRail({ collapsed }: SideRailProps): JSX.Element {
       return;
     }
     if (id === OVERVIEW_ID) return;
-    // A link row: its own anchor opened the site.
-    if (linkIds.has(id)) return;
+    // A link row in the expanded rail: its own anchor opened the site, so
+    // running the action too would open it twice. The collapsed rail's flyout
+    // draws the row without the link, so there the action is what opens it.
+    if (!collapsed && linkIds.has(id)) return;
     const action = actionById.get(id);
     if (action) {
       action({ queryClient });
