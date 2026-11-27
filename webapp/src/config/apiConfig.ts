@@ -1570,11 +1570,13 @@ const ABSOLUTE_HTTP_URL = /^https?:\/\//i;
 /**
  * Addresses of the WSO2 tools One WSO2 links to but does not host, keyed by the
  * app ids in `@constants/otherApps`. Only http(s) addresses are kept; an app with
- * no usable address is left out of the rail.
+ * no usable address is left out of the rail. The CSM portal keeps its own
+ * setting, `ONE_WSO2_CSM_URL`, which is the "csm" app's address in Customer Success.
  */
-export const otherAppUrls: Readonly<Record<string, string>> = readOtherAppUrls(
-  window.config?.ONE_WSO2_OTHER_APP_URLS,
-);
+export const otherAppUrls: Readonly<Record<string, string>> = readOtherAppUrls({
+  ...(typeof window.config?.ONE_WSO2_OTHER_APP_URLS === "object" ? window.config.ONE_WSO2_OTHER_APP_URLS : {}),
+  ...(csmUrl ? { csm: csmUrl } : {}),
+});
 
 /**
  * Keeps the entries of `configured` whose value is an http(s) URL.
