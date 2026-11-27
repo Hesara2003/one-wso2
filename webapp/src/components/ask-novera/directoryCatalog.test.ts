@@ -67,8 +67,13 @@ describe("otherAppDirectoryEntries", () => {
   it("keeps registry order and builds one entry per configured tool", () => {
     const urls = Object.fromEntries(OTHER_APPS.map((app) => [app.id, `https://${app.id}.example`]));
     expect(otherAppDirectoryEntries(urls).map((entry) => entry.id)).toEqual(
-      OTHER_APPS.map((app) => `other-app-${app.id}`),
+      OTHER_APPS.filter((app) => !app.ownSearchEntry).map((app) => `other-app-${app.id}`),
     );
+  });
+
+  // The CSM portal already has "Customer Success Management (CSM)" in search.
+  it("adds no second search entry for the CSM portal", () => {
+    expect(otherAppDirectoryEntries({ csm: "https://csm.example" })).toEqual([]);
   });
 });
 
