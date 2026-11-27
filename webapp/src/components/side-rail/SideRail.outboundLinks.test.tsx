@@ -61,12 +61,12 @@ vi.mock("./usePerspectiveVisibility", () => ({
 
 import SideRail from "./SideRail";
 
-function renderSideRail() {
+function renderSideRail(collapsed = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={["/engineering"]}>
-        <SideRail collapsed={false} />
+        <SideRail collapsed={collapsed} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -93,5 +93,18 @@ describe("SideRail rows that open another site", () => {
     expect(screen.queryByRole("link", { name: /Documentation/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByText("Documentation"));
     expect(docsAction).toHaveBeenCalled();
+  });
+
+  // The collapsed rail's flyout draws a row without its link and only reports
+  // the selection, so there the row's action is what opens the site.
+  it("opens a link row from the collapsed rail's flyout", async () => {
+    nexusAction.mockClear();
+    renderSideRail(true);
+    const user = userEvent.setup();
+    // Hovering opens Oxygen's popup; a click after the hover would toggle it shut again.
+    await user.hover(screen.getByRole("button", { name: /Builds & Artifacts/ }));
+
+    await user.click(await screen.findByRole("menuitem", { name: /WSO2 Nexus Repository/ }));
+    expect(nexusAction).toHaveBeenCalledTimes(1);
   });
 });
