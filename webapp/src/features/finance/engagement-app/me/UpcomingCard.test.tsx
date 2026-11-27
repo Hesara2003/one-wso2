@@ -49,7 +49,6 @@ const draw = () =>
   );
 
 beforeEach(() => {
-  window.config = { ...(original ?? {}), ONE_WSO2_PREVIEW_FEATURES: { engagementApp: true } } as Window["config"];
   state.configured = true;
   state.overview = { data: { allocations: [], trips: [] }, isPending: false, isError: false, isFetching: false, error: null };
   overviewEnabled.mockClear();
@@ -58,13 +57,13 @@ afterEach(() => {
   window.config = original;
 });
 
-describe("the Allocations & Trips card on the Me overview", () => {
+describe("the Allocations & Travels card on the Me overview", () => {
   it("is not drawn at all when nothing is coming up", () => {
     const { container } = draw();
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows upcoming allocations and trips, and a trip opens its travel request", () => {
+  it("shows upcoming allocations and travels, and a trip opens its travel request", () => {
     state.overview.data = {
       allocations: [
         {
@@ -80,7 +79,7 @@ describe("the Allocations & Trips card on the Me overview", () => {
       trips: [{ jobNumber: "TRV-2026-11-1301", traveller: { email: "jane@wso2.com", name: "Jane" }, country: "United States of America", city: "Boston", start: "2026-11-19", end: "2026-11-30", travelAgent: "Classic Travels", status: "In Progress" }],
     };
     draw();
-    expect(screen.getByText("Allocations & Trips")).toBeInTheDocument();
+    expect(screen.getByText("Allocations & Travels")).toBeInTheDocument();
     expect(screen.getByText("Northwind Bank – Open Banking PoC")).toBeInTheDocument();
     expect(screen.getByText("Clearance In Progress")).toBeInTheDocument();
     expect(screen.getByText("Upcoming Allocations")).toBeInTheDocument();
@@ -109,11 +108,8 @@ describe("the Allocations & Trips card on the Me overview", () => {
     expect(screen.queryByText(/passport|visa/i)).toBeNull();
   });
 
-  it("is not drawn, and asks nothing, while the feature is off or not connected", () => {
-    window.config = { ...(original ?? {}), ONE_WSO2_PREVIEW_FEATURES: {} } as Window["config"];
-    expect(draw().container).toBeEmptyDOMElement();
+  it("is not drawn, and asks nothing, while not connected", () => {
     state.configured = false;
-    window.config = { ...(original ?? {}), ONE_WSO2_PREVIEW_FEATURES: { engagementApp: true } } as Window["config"];
     expect(draw().container).toBeEmptyDOMElement();
     expect(overviewEnabled).not.toHaveBeenCalledWith(true);
   });
@@ -121,7 +117,7 @@ describe("the Allocations & Trips card on the Me overview", () => {
   it("says so, with Retry, when the read fails rather than looking empty", () => {
     state.overview = { ...state.overview, data: undefined, isError: true, error: new Error("boom") };
     draw();
-    expect(screen.getByText(/Couldn't load your upcoming allocations and trips/)).toBeInTheDocument();
+    expect(screen.getByText(/Couldn't load your upcoming allocations and travels/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });

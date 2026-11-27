@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import { useMemo } from "react";
 import { Box, Chip, DataGrid, IconButton, Stack, TextField, Tooltip, Typography } from "@wso2/oxygen-ui";
 import {
   DownloadIcon,
@@ -29,6 +30,7 @@ import {
   MASTER_DATA_STATUS,
   type Department,
   type ExpenseType,
+  type InvoiceAccountMapping,
   type MasterDataRow,
   type MasterDataTab,
 } from "./masterDataTypes";
@@ -45,16 +47,85 @@ import {
 /** Empty cells read as a dash, not as blank. */
 const EMPTY = "-";
 
-/** Lists render as chips; `valueFormatter` keeps CSV export readable. */
-function ChipList({ values }: { values: string[] }) {
+const CHIP_SX = { fontSize: 11, fontWeight: 600 } as const;
+
+// A small MUI Chip and the wrap gap between two rows of them, in px. Used to
+// turn a line count into the pixel height that caps a cell.
+const CHIP_ROW_PX = 24;
+const CHIP_GAP_PX = 4;
+const CHIP_PAD_PX = 12;
+
+/**
+ * Lists render as chips; `valueFormatter` keeps CSV export readable.
+ *
+ * `max` caps how many are drawn, and the rest become a `+n` chip with the
+ * whole list in a tooltip. A mapping can carry a dozen engagement codes, and
+ * uncapped that one row is as tall as the screen — which makes the table
+ * unreadable precisely when there is the most in it to find. Uncapped by
+ * default, so only the columns that need it pay for it.
+ *
+ * `lines` caps the height as well, because `max` alone cannot: it counts
+ * chips, and how many of them fit on a line depends on the column width and
+ * on how long the codes are. At a narrow width a code like MKT-BU_CORP-GEN
+ * takes a line to itself, so four chips meant four lines. With `lines` set
+ * the cell stops at that many rows whatever the width, and the tooltip
+ * carries the whole list — so a value hidden by the cap OR by the clip is
+ * still readable, which is why the tooltip goes on as soon as there is more
+ * than one value rather than only when `max` dropped some.
+ */
+function ChipList({ values, max, lines }: { values: string[]; max?: number; lines?: number }) {
   if (!values || values.length === 0) return <>{EMPTY}</>;
-  return (
-    <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ py: 0.75 }}>
-      {values.map((v) => (
-        <Chip key={v} label={v} title={v} size="small" sx={{ fontSize: 11, fontWeight: 600 }} />
+
+  const shown = max === undefined ? values : values.slice(0, max);
+  const hiddenCount = values.length - shown.length;
+  // No tooltip when there is one value and nothing can be hidden — one that
+  // repeats the cell is just something that flickers when the pointer
+  // crosses the row.
+  const mayHide = hiddenCount > 0 || (lines !== undefined && values.length > 1);
+  const spoken = values.join(", ");
+  const chips = (
+    <Stack
+      direction="row"
+      gap={0.5}
+      flexWrap="wrap"
+      // Focusable and named in full whenever the cell is holding something
+      // back, for the same reason as the info icon above: the tooltip is
+      // the only place the rest of the list can be read, and a bare div can
+      // be neither reached with a keyboard nor read out.
+      {...(mayHide ? { tabIndex: 0, "aria-label": spoken } : {})}
+      sx={{
+        py: 0.75,
+        ...(lines === undefined
+          ? {}
+          : {
+              maxHeight: lines * CHIP_ROW_PX + (lines - 1) * CHIP_GAP_PX + CHIP_PAD_PX,
+              overflow: "hidden",
+            }),
+      }}
+    >
+      {shown.map((v) => (
+        <Chip key={v} label={v} title={v} size="small" sx={CHIP_SX} />
       ))}
+      {hiddenCount > 0 && (
+        <Chip label={`+${hiddenCount}`} size="small" variant="outlined" sx={CHIP_SX} />
+      )}
     </Stack>
   );
+
+  if (!mayHide) return chips;
+  return (
+    <Tooltip arrow placement="top" title={<Box sx={{ p: 0.5, fontSize: 12.5 }}>{spoken}</Box>}>
+      {chips}
+    </Tooltip>
+  );
+}
+
+/** Which page of rows the grid is showing, and how many there are in all. */
+export interface MasterDataPagination {
+  /** Rows the filter matches across every page, for the grid's row count. */
+  rowCount: number;
+  model: { page: number; pageSize: number };
+  onModelChange: (model: { page: number; pageSize: number }) => void;
 }
 
 /**
@@ -88,6 +159,9 @@ function StatusChip({ value }: { value: string }) {
  */
 function InfoCell({ text, details }: { text: string; details: [string, string][] }) {
   const shown = details.filter(([, v]) => v && v !== EMPTY);
+  // The same lines the tooltip draws, as one string. Built from `details`
+  // rather than written out again so the two cannot drift apart.
+  const spoken = details.map(([k, v]) => `${k}: ${v || "N/A"}`).join(", ");
   return (
     <Stack direction="row" alignItems="center" gap={0.5} sx={{ minWidth: 0 }}>
       <Typography sx={{ fontSize: 12.5, wordBreak: "break-word" }}>{text || EMPTY}</Typography>
@@ -105,8 +179,21 @@ function InfoCell({ text, details }: { text: string; details: [string, string][]
             </Box>
           }
         >
-          {/* `flexShrink: 0` so the icon is not squeezed away by a long value. */}
-          <InfoIcon size={13} style={{ flexShrink: 0, opacity: 0.7 }} />
+          {/* Focusable, and carrying the details as its accessible name.
+              These fields have no column of their own, so a tooltip that
+              only a pointer can open is the only place they exist at all —
+              a bare icon leaves them unreachable by keyboard and silent to
+              a screen reader. `flexShrink: 0` so the icon is not squeezed
+              away by a long value. */}
+          <Box
+            component="span"
+            tabIndex={0}
+            role="img"
+            aria-label={spoken}
+            sx={{ display: "inline-flex", flexShrink: 0, opacity: 0.7 }}
+          >
+            <InfoIcon size={13} />
+          </Box>
         </Tooltip>
       )}
     </Stack>
@@ -120,11 +207,24 @@ const text = (): Partial<DataGrid.GridColDef> => ({
     : String(p.value)),
 });
 
-const chips = (): Partial<DataGrid.GridColDef> => ({
-  renderCell: (p) => <ChipList values={(p.value as string[]) ?? []} />,
-  // Export writes "a, b", not "[object Object]".
+const chips = (max?: number, lines?: number): Partial<DataGrid.GridColDef> => ({
+  renderCell: (p) => <ChipList values={(p.value as string[]) ?? []} max={max} lines={lines} />,
+  // Export writes "a, b", not "[object Object]" — and writes every value,
+  // not the `max` the cell shows.
   valueFormatter: (value) => ((value as string[])?.length ? (value as string[]).join(", ") : EMPTY),
 });
+
+/**
+ * Chips shown per mapping code cell before the rest move into the tooltip.
+ *
+ * An upper bound on the count; `MAX_MAPPING_CHIP_LINES` is what actually
+ * holds the row height, since four short codes fit two rows but four long
+ * ones at a narrow column did not.
+ */
+const MAX_MAPPING_CHIPS = 4;
+
+/** Rows of chips a mapping code cell may grow to. */
+const MAX_MAPPING_CHIP_LINES = 2;
 
 /** Per-tab columns, headers and widths, in the order they're read left to right. */
 const MASTER_DATA_COLUMNS: Record<MasterDataTab, DataGrid.GridColDef[]> = {
@@ -211,6 +311,53 @@ const MASTER_DATA_COLUMNS: Record<MasterDataTab, DataGrid.GridColDef[]> = {
       renderCell: (p) => <StatusChip value={p.value as string} />,
     },
   ],
+  invoiceAccountMappings: [
+    // Keyed on the code rather than on the account name, the way the
+    // expense-type tab is: a code identifies one account and a name does not
+    // — several accounts read as "Travel" — so scanning down the names tells
+    // you less per row than scanning down the codes.
+    {
+      field: "accountNumber",
+      headerName: "GL Code",
+      flex: 2,
+      minWidth: 150,
+      renderCell: (p) => {
+        const r = p.row as InvoiceAccountMapping;
+        return (
+          <InfoCell
+            text={r.accountNumber}
+            details={[
+              ["Account Name", r.accountClassification ?? ""],
+              ["Internal ID", r.internalId ?? ""],
+            ]}
+          />
+        );
+      },
+    },
+    { field: "costType", headerName: "Cost Type", flex: 2, minWidth: 160, ...text() },
+    {
+      field: "engagementCodes",
+      headerName: "Engagement Code",
+      flex: 2.5,
+      minWidth: 180,
+      ...chips(MAX_MAPPING_CHIPS, MAX_MAPPING_CHIP_LINES),
+    },
+    {
+      field: "engagementCodeSuffixes",
+      headerName: "Engagement Code Suffix",
+      flex: 2.5,
+      minWidth: 180,
+      ...chips(MAX_MAPPING_CHIPS, MAX_MAPPING_CHIP_LINES),
+    },
+    { field: "department", headerName: "Department", flex: 1.5, minWidth: 130, ...text() },
+    {
+      field: "status",
+      headerName: "Status",
+      flex: 1,
+      minWidth: 110,
+      renderCell: (p) => <StatusChip value={p.value as string} />,
+    },
+  ],
   creditCards: [
     { field: "ccNumber", headerName: "CC Number", flex: 1.5, minWidth: 130, ...text() },
     { field: "ccProviderCode", headerName: "CC Provider Code", flex: 1.5, minWidth: 150, ...text() },
@@ -236,7 +383,13 @@ const MASTER_DATA_COLUMNS: Record<MasterDataTab, DataGrid.GridColDef[]> = {
  * tables are wide, and hiding a column you do not need is worth the extra
  * button.
  */
-function MasterDataToolbar() {
+function MasterDataToolbar({
+  showSearch = true,
+  showColumnSearch = true,
+}: {
+  showSearch?: boolean;
+  showColumnSearch?: boolean;
+}) {
   return (
     <DataGrid.Toolbar>
       {/* `Toolbar` is a bare container and takes no `sx`, so the row's
@@ -251,18 +404,22 @@ function MasterDataToolbar() {
           "& .MuiButtonBase-root": { color: "text.secondary" },
         }}
       >
-        <DataGrid.FilterPanelTrigger render={<DataGrid.ToolbarButton />}>
-          <ListFilterIcon size={16} style={{ marginRight: 6 }} />
-          Column Search
-        </DataGrid.FilterPanelTrigger>
+        {showColumnSearch && (
+          <DataGrid.FilterPanelTrigger render={<DataGrid.ToolbarButton />}>
+            <ListFilterIcon size={16} style={{ marginRight: 6 }} />
+            Column Search
+          </DataGrid.FilterPanelTrigger>
+        )}
         <DataGrid.ExportCsv render={<DataGrid.ToolbarButton />}>
           <DownloadIcon size={16} style={{ marginRight: 6 }} />
           Export
         </DataGrid.ExportCsv>
         <Box sx={{ flex: 1 }} />
         {/* `expanded`, so the field is on screen rather than behind a
-            magnifier the reader has to click first. */}
-        <DataGrid.QuickFilter expanded>
+            magnifier the reader has to click first. Hidden on the tabs that
+            put their own search above the table, so there is never a second
+            box that searches the same rows a different way. */}
+        <DataGrid.QuickFilter expanded hidden={!showSearch}>
           <DataGrid.QuickFilterControl
             render={(props) => (
               <TextField
@@ -287,8 +444,9 @@ function MasterDataToolbar() {
  * One tab's table, with an Actions column of Edit and — on Subsidiaries and
  * Departments — Delete.
  *
- * Credit Cards and Expense Types have no Delete: both carry a status column
- * and retire a record through their form's Active/Inactive toggle instead.
+ * Credit Cards, Expense Types and Invoice Account Mappings have no Delete:
+ * each carries a status column and retires a record through its form's
+ * Active/Inactive toggle instead.
  *
  * Rows auto-size their height (`getRowHeight: () => "auto"`) because an
  * expense type can carry a dozen engagement-code chips and a fixed row
@@ -298,18 +456,41 @@ export default function MasterDataGrid({
   tab,
   rows,
   loading,
+  showSearch = true,
+  pagination,
   onEdit,
   onDelete,
 }: {
   tab: MasterDataTab;
   rows: MasterDataRow[];
   loading: boolean;
+  /** False where the page puts its own search box above the table. */
+  showSearch?: boolean;
+  /**
+   * Server-side paging. Absent — which is every tab but the mappings — means
+   * `rows` is the whole table and the grid pages it itself.
+   */
+  pagination?: MasterDataPagination;
   onEdit: (row: MasterDataRow) => void;
   onDelete: (row: MasterDataRow) => void;
 }) {
-  // Both tabs retire a record through their form's Active/Inactive toggle
+  // These tabs retire a record through their form's Active/Inactive toggle
   // instead — see `StatusToggle` in MasterDataFormDialog.
-  const showsDelete = tab !== "creditCards" && tab !== "expenseTypes";
+  const showsDelete =
+    tab !== "creditCards" && tab !== "expenseTypes" && tab !== "invoiceAccountMappings";
+
+  // Closed over rather than passed through `slotProps`, which would need the
+  // grid's ToolbarPropsOverrides augmenting to carry a prop of our own.
+  // Memoised so the toolbar is not a new component type on every render.
+  // Column Search narrows the rows the grid holds, which on a server-paged
+  // tab is one page, so it is left off there.
+  const showColumnSearch = pagination === undefined;
+  const toolbar = useMemo(
+    () => function Toolbar() {
+      return <MasterDataToolbar showSearch={showSearch} showColumnSearch={showColumnSearch} />;
+    },
+    [showSearch, showColumnSearch],
+  );
 
   const columns: DataGrid.GridColDef[] = [
     ...MASTER_DATA_COLUMNS[tab],
@@ -358,13 +539,30 @@ export default function MasterDataGrid({
         getRowHeight={() => "auto"}
         disableRowSelectionOnClick
         disableColumnMenu
-        slots={{ toolbar: MasterDataToolbar }}
+        slots={{ toolbar }}
         localeText={{ toolbarFilters: "Column Search" }}
-        initialState={{
-          sorting: { sortModel: [{ field: INITIAL_SORT_FIELD[tab], sort: "asc" }] },
-          pagination: { paginationModel: { pageSize: 100, page: 0 } },
-        }}
+        // A server-paged tab takes its order and its page from the request,
+        // so the grid is seeded with neither.
+        initialState={pagination
+          ? {}
+          : {
+              sorting: { sortModel: [{ field: INITIAL_SORT_FIELD[tab], sort: "asc" }] },
+              pagination: { paginationModel: { pageSize: 100, page: 0 } },
+            }}
         pageSizeOptions={[25, 50, 100]}
+        {...(pagination
+          ? {
+              paginationMode: "server" as const,
+              rowCount: pagination.rowCount,
+              paginationModel: pagination.model,
+              onPaginationModelChange: pagination.onModelChange,
+              // The request carries no sort or filter model, so these would
+              // reorder or narrow the page on screen while reading as though
+              // they covered every match.
+              disableColumnSorting: true,
+              disableColumnFilter: true,
+            }
+          : {})}
         sx={{
           ...FINANCE_GRID_SX,
           // Wrap a long header rather than clipping it — two of these tables

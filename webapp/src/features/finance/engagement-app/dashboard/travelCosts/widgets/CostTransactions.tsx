@@ -29,7 +29,9 @@ import { COST_SOURCE_LABEL } from "../../travelCostText";
 import { monthWithin } from "../dateRanges";
 import { deltaCell, deltaTone, originalText, PAID_LABEL, PAID_TONE, rateSourceText, usd2 } from "../costFormat";
 import { Change } from "../../dashboardParts";
-import { clampPage, GROUPS, PAGE_SIZE, transactionParams, type CostSort, type FilterKey, type GroupBy } from "../costView";
+import { PAGE_SIZES } from "../../../model/pageSize";
+import { clampPage, GROUPS, transactionParams, type CostSort, type FilterKey, type GroupBy } from "../costView";
+import { useTransactionPageSize } from "../useTransactionPageSize";
 import TransactionDrawer from "./TransactionDrawer";
 
 const GROUP_LABEL: Readonly<Record<GroupBy, string>> = {
@@ -71,7 +73,8 @@ const LINE_COLUMNS: readonly Column<CostLine>[] = [
 export default function CostTransactions({ ctx }: { ctx: WidgetCtx }): JSX.Element {
   const { view, set } = ctx.cost;
   // Not asked before the business date is known: the period would otherwise start from the browser's date and then move.
-  const q = useTravelCostTransactions(transactionParams(view), ctx.cost.ready);
+  const [size, setSize] = useTransactionPageSize();
+  const q = useTravelCostTransactions(transactionParams(view, size), ctx.cost.ready);
   const [open, setOpen] = useState<CostLine | undefined>();
   const compared = Boolean(ctx.cost.query.data?.compare);
   const d = q.data;
@@ -87,7 +90,7 @@ export default function CostTransactions({ ctx }: { ctx: WidgetCtx }): JSX.Eleme
   const groupColumns: Column<CostGroup>[] = [
     { key: "label", label: view.group ? GROUP_LABEL[view.group] : "", render: (g) => g.label },
     { key: "lines", label: "Lines", align: "right", render: (g) => n0(g.lines) },
-    { key: "trips", label: "Trips", align: "right", render: (g) => n0(g.trips) },
+    { key: "trips", label: "Travels", align: "right", render: (g) => n0(g.trips) },
     { key: "travellers", label: "Travellers", align: "right", render: (g) => n0(g.travellers) },
     { key: "total", label: "Total", align: "right", render: (g) => usd2(g.total) },
     ...(compared
@@ -98,11 +101,25 @@ export default function CostTransactions({ ctx }: { ctx: WidgetCtx }): JSX.Eleme
       : []),
   ];
   // A page past the end (an old link, a filter that left fewer rows) goes to the last page instead of showing "No transactions".
-  const page = d ? clampPage(view.page, d.total) : view.page;
+  const page = d ? clampPage(view.page, d.total, size) : view.page;
   useEffect(() => {
     if (d && page !== view.page) set({ tcPage: page > 0 ? String(page) : undefined });
   }, [d, page, view.page, set]);
-  const pagination = d && d.total > PAGE_SIZE ? { page, pageSize: PAGE_SIZE, total: d.total, onPage: (p: number) => set({ tcPage: p > 0 ? String(p) : undefined }) } : undefined;
+  const toPage = (p: number) => set({ tcPage: p > 0 ? String(p) : undefined });
+  const pagination = d
+    ? {
+        page,
+        pageSize: size,
+        total: d.total,
+        onPage: toPage,
+        pageSizes: PAGE_SIZES,
+        // Keep the first row on screen in view: row 30 at 25 a page is page 1, at 10 a page it is page 3.
+        onPageSize: (next: number) => {
+          setSize(next);
+          toPage(Math.floor((page * size) / next));
+        },
+      }
+    : undefined;
 
   return (
     <>

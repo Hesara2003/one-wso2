@@ -73,8 +73,8 @@ declare global {
       ONE_WSO2_SWAG_STORE_BACKEND_URL?: string;
       // Base URL for the Engagement App Backend (Finance → Engagement App and
       // the Engagement App pages under Me), version segment included. Optional —
-      // when absent (and the `engagementApp` preview flag is on) its pages show
-      // a not-connected state and make no requests.
+      // when absent the Engagement App is hidden: no rail entries, no routes
+      // and no requests.
       ONE_WSO2_ENGAGEMENT_APP_BACKEND_URL?: string;
       // Base URL for the Procurement backend, version segment included.
       // Optional — when absent (and the `procurement` preview flag is on)
@@ -97,13 +97,10 @@ declare global {
       // "not configured" state.
       ONE_WSO2_PAR_BACKEND_URL?: string;
       // OAuth client ID for the Lead Portal's "attach from Google Drive"
-      // evidence picker (scope: drive.readonly). Optional — when absent,
-      // the picker button still renders but the token request fails, same
-      // as par-app's own GOOGLE_OAUTH_CLIENT_ID behavior.
+      // evidence picker (scope: drive.readonly), used only when the PAR
+      // backend doesn't send its own. Optional — when neither is set, the
+      // picker button still renders but the token request fails.
       ONE_WSO2_PAR_GOOGLE_OAUTH_CLIENT_ID?: string;
-      // Browser API key for the same picker. Optional — see apiConfig.ts's
-      // googlePickerApiKey for why it's unset by default.
-      ONE_WSO2_PAR_GOOGLE_PICKER_API_KEY?: string;
       // The PAR rating names that trigger the Top 5%/20% checkbox and the
       // evidence-attachment requirement. Optional — see apiConfig.ts's
       // top5p20pEnabledRating/evidenceEnabledRating for why.

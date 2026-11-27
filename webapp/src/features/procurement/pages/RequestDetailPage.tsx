@@ -21,6 +21,7 @@ import { describeError } from "@api/errors";
 import { RequestStatusChip } from "../components/ProcurementChips";
 import DecisionNotice from "../components/DecisionNotice";
 import SavedRequestSummary from "../components/SavedRequestSummary";
+import TeamLeadEdit from "../components/TeamLeadEdit";
 import RequestForm from "../request-form/RequestForm";
 import { draftFromRequest } from "../request-form/requestFormModel";
 import { useAttachments, useProcurementLookups, useProcurementMe, useRequest, useResubmitRequest, useCancelRequest } from "../api/useProcurement";
@@ -79,6 +80,7 @@ export default function RequestDetailPage() {
 function RequestDetailContent() {
   const { requestId } = useParams();
   const request = useRequest(requestId);
+  const me = useProcurementMe();
   const [editing, setEditing] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const cancel = useCancelRequest(requestId ?? "");
@@ -148,6 +150,18 @@ function RequestDetailContent() {
         {data && (
           <Stack spacing={2}>
             <DecisionNotice request={data} />
+            {!editing && !me.data && me.isError && (
+              <Alert
+                severity="error"
+                action={
+                  <Button color="inherit" size="small" onClick={() => void me.refetch()}>
+                    Retry
+                  </Button>
+                }
+              >
+                Who you are could not be read, so the actions for you are hidden. {describeError(me.error)}
+              </Alert>
+            )}
             {editing ? (
               <>
                 <Button color="inherit" variant="outlined" onClick={() => setEditing(false)} sx={{ alignSelf: "flex-start" }}>
@@ -160,7 +174,7 @@ function RequestDetailContent() {
                 {data.status !== "rejected" && (
                   <Alert severity="info">This request is read-only in its current state.</Alert>
                 )}
-                <SavedRequestSummary request={data} />
+                <SavedRequestSummary request={data} requesterAction={me.data ? <TeamLeadEdit request={data} me={me.data.email} /> : undefined} />
               </>
             )}
           </Stack>

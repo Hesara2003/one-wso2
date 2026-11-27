@@ -18,7 +18,9 @@ import { describe, expect, it } from "vitest";
 import {
   changedFields,
   initialFormData,
+  invalidEngagementCodes,
   isCreditCardNumberValid,
+  isEngagementCodeValid,
   isFormComplete,
   isUnchanged,
 } from "./masterDataForm";
@@ -27,6 +29,9 @@ import type {
   CreditCardPayload,
   ExpenseType,
   ExpenseTypePayload,
+  InvoiceAccountMapping,
+  InvoiceAccountMappingPayload,
+  MasterDataRow,
   SubsidiaryPayload,
 } from "./masterDataTypes";
 
@@ -341,5 +346,194 @@ describe("initialFormData — seeding the payload from an existing row, or blank
     };
     const form = initialFormData("creditCards", row) as CreditCardPayload;
     expect(form.comment).toBe("");
+  });
+});
+
+// ---- Invoice account mappings ---------------------------------------------
+//
+// The rules here exist because of two things that have actually gone wrong in
+// production. Codes pasted out of Finance's spreadsheet reached the table
+// carrying CR/LF and had to be scrubbed by hand with a REPLACE() script; and
+// because both code columns store a comma-separated list in one field, a
+// comma inside one entry silently becomes two codes.
+
+/** A complete mapping form, which each test below varies one field of. */
+const MAPPING_FORM: InvoiceAccountMappingPayload = {
+  internalId: "351",
+  accountNumber: "61033-003",
+  accountClassification: "Travel - Air Ticket",
+  engagementCodes: ["RND-GEN-INT"],
+  engagementCodeSuffixes: [],
+  invCostTypeId: 1,
+  department: "Engineering",
+};
+
+describe("isEngagementCodeValid — what one code may contain", () => {
+  it("accepts the shapes the table actually holds", () => {
+    expect(isEngagementCodeValid("RND-GEN-INT")).toBe(true);
+    expect(isEngagementCodeValid("MKT-BU_CORP-GEN")).toBe(true);
+    expect(isEngagementCodeValid("Vok0z-PR")).toBe(true);
+  });
+  it("rejects a comma, which would silently become two codes", () => {
+    expect(isEngagementCodeValid("RND-GEN,BAL-RND")).toBe(false);
+  });
+  it("rejects spaces and line breaks, the contamination seen in production", () => {
+    expect(isEngagementCodeValid("RND GEN")).toBe(false);
+    expect(isEngagementCodeValid("RND-GEN\n")).toBe(false);
+    expect(isEngagementCodeValid("RND-GEN\r")).toBe(false);
+  });
+  it("rejects an empty code", () => {
+    expect(isEngagementCodeValid("")).toBe(false);
+  });
+});
+
+describe("invalidEngagementCodes — which chips are named back", () => {
+  it("reports nothing when both lists are clean", () => {
+    expect(invalidEngagementCodes(MAPPING_FORM)).toEqual([]);
+  });
+  it("reports offenders from the codes and the suffixes alike", () => {
+    const form: InvoiceAccountMappingPayload = {
+      ...MAPPING_FORM,
+      engagementCodes: ["RND-GEN-INT", "BAD CODE"],
+      engagementCodeSuffixes: ["RND-CON", "A,B"],
+    };
+    expect(invalidEngagementCodes(form)).toEqual(["BAD CODE", "A,B"]);
+  });
+});
+
+describe("isFormComplete — invoice account mappings", () => {
+  it("accepts a mapping scoped by engagement codes alone", () => {
+    expect(isFormComplete("invoiceAccountMappings", MAPPING_FORM)).toBe(true);
+  });
+  it("accepts a mapping scoped by suffixes alone", () => {
+    const form: InvoiceAccountMappingPayload = {
+      ...MAPPING_FORM,
+      engagementCodes: [],
+      engagementCodeSuffixes: ["RND-CON"],
+    };
+    expect(isFormComplete("invoiceAccountMappings", form)).toBe(true);
+  });
+  it("refuses a mapping scoped by neither, which Travel could never match", () => {
+    const form: InvoiceAccountMappingPayload = {
+      ...MAPPING_FORM,
+      engagementCodes: [],
+      engagementCodeSuffixes: [],
+    };
+    expect(isFormComplete("invoiceAccountMappings", form)).toBe(false);
+  });
+  it("treats a blank department as filled in — the Intercompany rows carry one", () => {
+    expect(isFormComplete("invoiceAccountMappings", { ...MAPPING_FORM, department: "" })).toBe(true);
+  });
+  it("refuses an otherwise complete form carrying a code the column cannot hold", () => {
+    const form: InvoiceAccountMappingPayload = {
+      ...MAPPING_FORM,
+      engagementCodes: ["RND-GEN,BAL-RND"],
+    };
+    expect(isFormComplete("invoiceAccountMappings", form)).toBe(false);
+  });
+  it("refuses a mapping with no cost type chosen", () => {
+    expect(isFormComplete("invoiceAccountMappings", { ...MAPPING_FORM, invCostTypeId: 0 })).toBe(false);
+  });
+});
+
+describe("initialFormData — invoice account mappings", () => {
+  const row: InvoiceAccountMapping = {
+    id: 14,
+    internalId: "351",
+    accountNumber: "61033-003",
+    accountClassification: "Travel - Air Ticket",
+    engagementCodes: ["RND-GEN-INT", "RND-GEN-IAM"],
+    engagementCodeSuffixes: ["RND-CON"],
+    invCostTypeId: 1,
+    costType: "Air Ticket",
+    department: null,
+    // Rows written before this screen existed carry the capitalised form.
+    status: "Active",
+  };
+
+  it("flattens a row and lower-cases the status it was stored under", () => {
+    expect(initialFormData("invoiceAccountMappings", row)).toEqual({
+      internalId: "351",
+      accountNumber: "61033-003",
+      accountClassification: "Travel - Air Ticket",
+      engagementCodes: ["RND-GEN-INT", "RND-GEN-IAM"],
+      engagementCodeSuffixes: ["RND-CON"],
+      invCostTypeId: 1,
+      // A null department seeds "" so an untouched blank does not read as a change.
+      department: "",
+      status: "active",
+    });
+  });
+
+  // No status while creating, as on the other tabs. Nothing is ever filed
+  // inactive, so the Add dialog has no toggle and the backend stores a
+  // mapping active when the payload carries no status at all.
+  it("seeds no status when creating, so the Add form shows no toggle", () => {
+    const form = initialFormData("invoiceAccountMappings") as InvoiceAccountMappingPayload;
+    expect(form).not.toHaveProperty("status");
+    expect(form.invCostTypeId).toBe(0);
+  });
+
+  it("reads as unchanged against the row it was seeded from, despite the casing", () => {
+    const form = initialFormData("invoiceAccountMappings", row);
+    expect(isUnchanged(row, form)).toBe(true);
+    expect(changedFields(row, form)).toEqual({});
+  });
+
+  it("sends only the fields that moved", () => {
+    const form = initialFormData("invoiceAccountMappings", row) as InvoiceAccountMappingPayload;
+    // Same codes, different order — the order they were picked in is not a change.
+    form.engagementCodes = ["RND-GEN-IAM", "RND-GEN-INT"];
+    form.invCostTypeId = 4;
+    expect(changedFields(row, form)).toEqual({ invCostTypeId: 4 });
+  });
+});
+
+// A code with a slash or an ampersand reached this table from a spreadsheet
+// paste, long before the screen existed. The backend enforces the same
+// whitelist the form does, but an edit sends only the fields it changed — so
+// a code nobody touched is never submitted, and refusing it here would leave
+// a legacy mapping impossible to retire or re-file.
+describe("engagement codes already stored on a row", () => {
+  const legacy = {
+    id: 14,
+    internalId: "351",
+    accountNumber: "61033-003",
+    accountClassification: "Travel - Air Ticket",
+    engagementCodes: ["RND/GEN"],
+    engagementCodeSuffixes: ["R&D"],
+    invCostTypeId: 1,
+    costType: "Air Ticket",
+    department: "Engineering",
+    status: "active",
+  } as MasterDataRow;
+
+  const form = {
+    ...MAPPING_FORM,
+    engagementCodes: ["RND/GEN"],
+    engagementCodeSuffixes: ["R&D"],
+  } as InvoiceAccountMappingPayload;
+
+  it("are not reported as invalid when they came with the row", () => {
+    expect(invalidEngagementCodes(form, legacy)).toEqual([]);
+  });
+
+  it("do not block the edit, so such a mapping can still be retired", () => {
+    expect(isFormComplete("invoiceAccountMappings", form, legacy)).toBe(true);
+  });
+
+  // Only what was already there is forgiven. Anything typed now has to be
+  // storable, or the backend answers the save with a 400.
+  it("still refuse a new bad code typed alongside them", () => {
+    const withNew = { ...form, engagementCodes: ["RND/GEN", "MKT GEN"] };
+
+    expect(invalidEngagementCodes(withNew, legacy)).toEqual(["MKT GEN"]);
+    expect(isFormComplete("invoiceAccountMappings", withNew, legacy)).toBe(false);
+  });
+
+  // Creating has no row to inherit from, so every code is held to the rule.
+  it("are still refused while creating, where nothing is inherited", () => {
+    expect(invalidEngagementCodes(form)).toEqual(["RND/GEN", "R&D"]);
+    expect(isFormComplete("invoiceAccountMappings", form)).toBe(false);
   });
 });

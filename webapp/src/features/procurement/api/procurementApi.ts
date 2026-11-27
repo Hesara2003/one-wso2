@@ -27,6 +27,7 @@ import type {
   ApprovalItem,
   Attachment,
   BudgetApproverOption,
+  BudgetChange,
   Choice,
   Person,
   ProcurementLookups,
@@ -57,6 +58,7 @@ import type {
 import {
   toApprovalItem,
   toAttachment,
+  toBackendBudgetChange,
   toBackendStatus,
   toBudgetApprovers,
   toChoices,
@@ -93,8 +95,12 @@ export interface ProcurementApi {
   listApprovals: (status?: RequestStatus) => Promise<ApprovalItem[]>;
   /** Approve or reject a request that waits for the user's decision. */
   decideRequest: (requestId: string, decision: ApprovalDecisionInput) => Promise<void>;
-  /** The approved and assigned requests Procurement handles, the most urgent first. */
-  listTeamQueue: (filter?: { status?: RequestStatus; priority?: Priority }) => Promise<QueueItem[]>;
+  /**
+   * The requests Procurement handles, the most urgent first.
+   *
+   * @param filter.assignee - Only the requests assigned to this email. The backend cannot filter by it, so every page of the queue is read
+   */
+  listTeamQueue: (filter?: { status?: RequestStatus; priority?: Priority; assignee?: string }) => Promise<QueueItem[]>;
   /** Assign an approved request to the signed-in user, or to `email` when given. */
   assignRequest: (requestId: string, email?: string) => Promise<void>;
   /** Take the assignee off an assigned request. */
@@ -106,6 +112,16 @@ export interface ProcurementApi {
   listAttachments: (requestId: string) => Promise<Attachment[]>;
   /** The bytes of a saved file. */
   downloadAttachment: (requestId: string, attachmentId: string) => Promise<Blob>;
+  /** Name another team lead, by email, for a request of the signed-in user that waits for its first decision. Both leads are emailed. */
+  changeTeamLead: (requestId: string, email: string) => Promise<void>;
+  /** The people a request can be assigned to: the members of the Procurement groups. */
+  listTeamMembers: () => Promise<Person[]>;
+  /** Replace the budget details of an approved or assigned request. */
+  changeBudget: (requestId: string, change: BudgetChange) => Promise<void>;
+  /** Let a person, by email, read an approved or assigned request. */
+  addCollaborator: (requestId: string, email: string) => Promise<void>;
+  /** Take a collaborator off a request. */
+  removeCollaborator: (requestId: string, email: string) => Promise<void>;
 }
 
 /** Whether a dev build should serve sample data in place of the missing backend. */
@@ -123,6 +139,9 @@ const REFERENCE_TYPES = ["BUDGET_CATEGORY", "BUSINESS_UNIT", "PRODUCT", "REGION"
 
 /** My Requests shows one page of this many, the most the backend allows. */
 const REQUEST_PAGE_SIZE = 100;
+
+/** The most pages read of the queue to find the requests assigned to one person, so a fault in the paging cannot read for ever. */
+const MAX_QUEUE_PAGES = 50;
 
 const ALREADY_SUBMITTED = "This request was already submitted. Check My Requests before sending it again.";
 
@@ -252,8 +271,19 @@ function createHttpProcurementApi(getAccessToken: () => Promise<string>, user: P
     decideRequest: async (requestId, decision) => {
       await authedPost(urls.decideRequest(requestId), await getAccessToken(), toNewDecision(decision));
     },
-    listTeamQueue: async ({ status, priority } = {}) =>
-      (await get<BackendProcurementItem[]>(urls.teamQueue(REQUEST_PAGE_SIZE, status && toBackendStatus(status), priority))).map(toQueueItem),
+    listTeamQueue: async ({ status, priority, assignee } = {}) => {
+      const page = async (offset: number): Promise<QueueItem[]> =>
+        (await get<BackendProcurementItem[]>(urls.teamQueue(REQUEST_PAGE_SIZE, status && toBackendStatus(status), priority, offset))).map(toQueueItem);
+      if (!assignee) return page(0);
+      const mine: QueueItem[] = [];
+      for (let index = 0; index < MAX_QUEUE_PAGES; index += 1) {
+        const rows = await page(index * REQUEST_PAGE_SIZE);
+        mine.push(...rows.filter((r) => r.assignee.toLowerCase() === assignee.toLowerCase()));
+        if (rows.length < REQUEST_PAGE_SIZE) return mine;
+      }
+      // Every permitted page was full, so the queue may go on, and what was found is not the whole answer.
+      throw new Error("There are too many requests in the queue to find all the ones assigned to you.");
+    },
     assignRequest: async (requestId, email) => {
       await authedPost(urls.assignRequest(requestId, email), await getAccessToken(), {});
     },
@@ -272,6 +302,19 @@ function createHttpProcurementApi(getAccessToken: () => Promise<string>, user: P
       const res = await fetchWithReauth(url, {}, await getAccessToken());
       if (!res.ok) throw new HttpError(url, res.status, await res.text().catch(() => ""));
       return res.blob();
+    },
+    changeTeamLead: async (requestId, email) => {
+      await authedPut(urls.requestTeamLead(requestId), await getAccessToken(), { email });
+    },
+    listTeamMembers: async () => (await get<BackendDirectoryUser[]>(urls.teamMembers)).map(toPerson),
+    changeBudget: async (requestId, change) => {
+      await authedPut(urls.requestBudget(requestId), await getAccessToken(), toBackendBudgetChange(change));
+    },
+    addCollaborator: async (requestId, email) => {
+      await authedPost(urls.requestCollaborators(requestId), await getAccessToken(), { email });
+    },
+    removeCollaborator: async (requestId, email) => {
+      await authedDelete(urls.requestCollaborator(requestId, email), await getAccessToken());
     },
   };
 }

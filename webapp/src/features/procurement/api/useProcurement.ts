@@ -22,7 +22,7 @@ import { useAccessToken } from "@hooks/useAccessToken";
 import { useAsgardeoUser } from "@hooks/useAsgardeoUser";
 import { saveBlob } from "@utils/saveFile";
 import { MIN_DIRECTORY_QUERY } from "../request-form/requestFormModel";
-import type { ApprovalDecisionInput, Attachment, Person, Priority, PurchaseRequestInput, RequestStatus } from "../types";
+import type { ApprovalDecisionInput, Attachment, BudgetChange, Person, Priority, PurchaseRequestInput, RequestStatus } from "../types";
 import { createProcurementApi, isProcurementAvailable } from "./procurementApi";
 
 const REFERENCE_STALE_TIME = 5 * 60 * 1000;
@@ -185,6 +185,20 @@ export function useResubmitRequest(requestId: string) {
   });
 }
 
+/** Name another team lead for a request. Refreshes that request and the list. */
+export function useChangeTeamLead(requestId: string) {
+  const { api, userId } = useProcurementContext();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string) => api!.changeTeamLead(requestId, email),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: [...root(userId), "request", requestId] }),
+        queryClient.invalidateQueries({ queryKey: [...root(userId), "requests"] }),
+      ]),
+  });
+}
+
 /** Withdraw a request. Refreshes that request and the list. */
 export function useCancelRequest(requestId: string) {
   const { api, userId } = useProcurementContext();
@@ -223,13 +237,33 @@ export function useDecideRequest(requestId: string) {
   });
 }
 
-export function useTeamQueue(filter: { status?: RequestStatus; priority?: Priority }) {
+/**
+ * @param filter.assignee - Only the requests assigned to this email
+ * @param active - Whether to ask yet; "Assigned to me" waits until the signed-in user's email is known
+ */
+export function useTeamQueue(filter: { status?: RequestStatus; priority?: Priority; assignee?: string }, active = true) {
   const { api, userId, enabled } = useProcurementContext();
   return useQuery({
-    queryKey: [...root(userId), "team-queue", filter.status ?? "all", filter.priority ?? "all"],
-    enabled,
+    queryKey: [...root(userId), "team-queue", filter.status ?? "all", filter.priority ?? "all", filter.assignee?.toLowerCase() ?? "anyone"],
+    enabled: enabled && active,
     retry: defaultQueryRetry,
     queryFn: () => api!.listTeamQueue(filter),
+  });
+}
+
+/**
+ * The people a request can be assigned to.
+ *
+ * @param active - Whether to ask at all; only the page that assigns needs the team
+ */
+export function useProcurementTeam(active = true) {
+  const { api, userId, enabled } = useProcurementContext();
+  return useQuery({
+    queryKey: [...root(userId), "team-members"],
+    enabled: enabled && active,
+    staleTime: REFERENCE_STALE_TIME,
+    retry: defaultQueryRetry,
+    queryFn: () => api!.listTeamMembers(),
   });
 }
 
@@ -250,6 +284,18 @@ function useHandlingAction<V>(requestId: string, run: (api: NonNullable<ReturnTy
 /** Assign to the signed-in user, or to the given email. */
 export const useAssignRequest = (requestId: string) =>
   useHandlingAction<string | undefined>(requestId, (api, email) => api.assignRequest(requestId, email));
+
+/** Replace the budget details of a request. */
+export const useChangeBudget = (requestId: string) =>
+  useHandlingAction<BudgetChange>(requestId, (api, change) => api.changeBudget(requestId, change));
+
+/** Add a collaborator, by email. */
+export const useAddCollaborator = (requestId: string) =>
+  useHandlingAction<string>(requestId, (api, email) => api.addCollaborator(requestId, email));
+
+/** Take a collaborator off, by email. */
+export const useRemoveCollaborator = (requestId: string) =>
+  useHandlingAction<string>(requestId, (api, email) => api.removeCollaborator(requestId, email));
 
 export const useUnassignRequest = (requestId: string) => useHandlingAction<void>(requestId, (api) => api.unassignRequest(requestId));
 

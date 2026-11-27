@@ -15,14 +15,14 @@
 // under the License.
 
 import { useEffect, useRef, useState, type JSX } from "react";
-import { Alert, Badge, Box, Button, Card, Chip, FormControlLabel, keyframes, Menu, MenuItem, Stack, Switch, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@wso2/oxygen-ui";
+import { Alert, Badge, Box, Button, Card, Chip, FormControlLabel, keyframes, Link, Menu, MenuItem, Stack, Switch, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@wso2/oxygen-ui";
 import { ChartColumnIcon, DownloadIcon, FilterIcon, TableIcon } from "@wso2/oxygen-ui-icons-react";
 import { eaSurfaceSx } from "../../components/eaStyles";
 import { FilterDate, FilterSelect } from "../../components/FilterFields";
 import { fmtDate } from "../../model/format";
 import { InfoHint } from "../dashboardParts";
 import { utcStamp } from "./costFormat";
-import { COST_SOURCE_LABEL, notConvertedText, USD_RATE_HINT_WITH_TRANSACTIONS } from "../travelCostText";
+import { COST_SOURCE_LABEL, NOT_CONVERTED_INLINE_MAX, notConvertedList, notConvertedSummary, notConvertedText, USD_RATE_HINT_WITH_TRANSACTIONS } from "../travelCostText";
 import type { CostCtx } from "../widgets/types";
 import CostFilterDialog from "./CostFilterDialog";
 import { describeFilter, FILTER_LABEL } from "./filterOptions";
@@ -115,14 +115,19 @@ export default function TravelCostControls({ cost, today, canDownloadTransaction
     // Only a new click: the filters it set are read as they stand then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drill?.id]);
-  const skipped = data ? notConvertedText(data.notConverted) : "";
+  const unconverted = data?.notConverted ?? [];
+  const skipped = notConvertedText(unconverted);
+  const manySkipped = unconverted.length > NOT_CONVERTED_INLINE_MAX;
+  const [skippedOpen, setSkippedOpen] = useState(false);
   return (
     <Card ref={card} variant="outlined" component="section" aria-label="Travel Costs controls" sx={[{ p: 2, minWidth: 0, scrollMarginTop: APP_BAR_CLEARANCE + 16 }, eaSurfaceSx]}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1.5 }}>
-        <Typography component="h2" sx={{ fontSize: 15, fontWeight: 600, mr: 0.5 }}>
-          Travel Costs
-        </Typography>
-        <InfoHint label="How USD is calculated">{USD_RATE_HINT_WITH_TRANSACTIONS}</InfoHint>
+      <Stack direction="row" useFlexGap spacing={2.5} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1.5 }}>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+          <Typography component="h2" sx={{ fontSize: 15, fontWeight: 600 }}>
+            Travel Costs
+          </Typography>
+          <InfoHint label="How USD is calculated">{USD_RATE_HINT_WITH_TRANSACTIONS}</InfoHint>
+        </Stack>
         <Box sx={{ flex: 1 }} />
         <Box sx={{ minWidth: 180 }}>
           <FilterSelect label="Period" anyLabel={null} value={view.range} options={RANGE_PRESETS.map((p) => [p.value, p.label] as const)} onChange={pickPreset} />
@@ -152,6 +157,7 @@ export default function TravelCostControls({ cost, today, canDownloadTransaction
           control={<Switch size="small" checked={view.compare} onChange={(e) => set({ tcCompare: e.target.checked ? undefined : "0" })} />}
           label="Compare With Last Year"
           slotProps={{ typography: { fontSize: 13 } }}
+          sx={{ m: 0, gap: 1 }}
         />
         <ToggleButtonGroup exclusive size="small" value={view.mode} onChange={(_, v: "charts" | "tables" | null) => v && set({ tcView: v === "tables" ? "tables" : undefined })} aria-label="View" sx={{ "& .MuiToggleButton-root": { px: 1.25, height: 36 } }}>
           {VIEW_MODES.map(({ mode, label, Icon }) => (
@@ -222,7 +228,17 @@ export default function TravelCostControls({ cost, today, canDownloadTransaction
       ) : null}
       {skipped ? (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-          {skipped}
+          {manySkipped ? notConvertedSummary(unconverted) : skipped}
+          {manySkipped ? (
+            <Link component="button" type="button" variant="body2" onClick={() => setSkippedOpen((o) => !o)} aria-expanded={skippedOpen} sx={{ ml: 0.75, verticalAlign: "baseline" }}>
+              {skippedOpen ? "Hide Details" : "Show Details"}
+            </Link>
+          ) : null}
+        </Typography>
+      ) : null}
+      {manySkipped && skippedOpen ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+          {notConvertedList(unconverted)}
         </Typography>
       ) : null}
       {filtersOpen ? (

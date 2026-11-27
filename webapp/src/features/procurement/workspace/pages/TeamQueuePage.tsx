@@ -32,27 +32,52 @@ import {
 import { describeError } from "@api/errors";
 import FilterChips from "../../components/FilterChips";
 import { RequestStatusChip } from "../../components/ProcurementChips";
-import { useTeamQueue } from "../../api/useProcurement";
+import { useProcurementMe, useTeamQueue } from "../../api/useProcurement";
 import { workspacePaths } from "../workspacePaths";
 import type { RequestStatus } from "../../types";
 
 const CATEGORY_LABEL = { IT: "IT", "NON-IT": "Non-IT", EVENTS: "Marketing & Events" } as const;
 const ALL = "all";
-const STATUSES: { value: typeof ALL | "approved" | "assigned"; label: string }[] = [
+const MINE = "mine";
+type QueueView = typeof ALL | "approved" | "assigned" | typeof MINE;
+const SHOWS: { value: QueueView; label: string }[] = [
   { value: ALL, label: "All" },
   { value: "approved", label: "Waiting to be assigned" },
   { value: "assigned", label: "Assigned" },
+  { value: MINE, label: "Assigned to me" },
 ];
 
 export default function TeamQueuePage() {
-  const [status, setStatus] = useState<typeof ALL | "approved" | "assigned">(ALL);
-  const queue = useTeamQueue({ status: status === ALL ? undefined : (status as RequestStatus) });
+  const [show, setShow] = useState<QueueView>(ALL);
+  const me = useProcurementMe();
+  const mine = show === MINE;
+  // "Assigned to me" needs the user's email, so it waits for it and the other chips do not.
+  const queue = useTeamQueue(
+    { status: show === ALL ? undefined : ((mine ? "assigned" : show) as RequestStatus), assignee: mine ? me.data?.email : undefined },
+    !mine || Boolean(me.data),
+  );
   const navigate = useNavigate();
+  const waitingForMe = mine && !me.data && !me.isError;
+  const identityFailed = mine && !me.data && me.isError;
+  // Under "Assigned to me" with no identity yet, the query may still hold the rows of "Assigned", which are not the user's.
+  const rows = mine && !me.data ? undefined : queue.data;
 
   return (
     <>
-      <FilterChips label="Show" options={STATUSES} value={status} onChange={setStatus} />
-      {queue.isError && (
+      <FilterChips label="Show" options={SHOWS} value={show} onChange={setShow} />
+      {identityFailed && (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={() => void me.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          Your requests could not be found because who you are could not be read. {describeError(me.error)}
+        </Alert>
+      )}
+      {!identityFailed && queue.isError && (
         <Alert
           severity="error"
           action={
@@ -64,9 +89,9 @@ export default function TeamQueuePage() {
           {describeError(queue.error)}
         </Alert>
       )}
-      {queue.isPending && !queue.isError && <Skeleton variant="rounded" height={200} />}
-      {queue.data && queue.data.length === 0 && <Typography color="text.secondary">No requests match</Typography>}
-      {queue.data && queue.data.length > 0 && (
+      {!identityFailed && (waitingForMe || (queue.isPending && !queue.isError)) && <Skeleton variant="rounded" height={200} />}
+      {!identityFailed && rows && rows.length === 0 && <Typography color="text.secondary">No requests match</Typography>}
+      {!identityFailed && rows && rows.length > 0 && (
         <TableContainer>
           <Table size="small">
             <TableHead>
@@ -81,7 +106,7 @@ export default function TeamQueuePage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {queue.data.map((r) => (
+              {rows.map((r) => (
                 <TableRow
                   key={r.id}
                   hover

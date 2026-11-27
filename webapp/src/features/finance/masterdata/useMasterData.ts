@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useAsgardeo } from "@asgardeo/react";
 import { authedGet, authedPost } from "@api/http";
 import { useAccessToken } from "@hooks/useAccessToken";
@@ -30,6 +30,10 @@ import {
   type ExpenseTypeAutoComplete,
   type ExpenseTypeFilter,
   type GlCode,
+  type InvoiceAccountMappingAutoComplete,
+  type InvoiceAccountMappingFilter,
+  type InvoiceAccountMappingPage,
+  type InvoiceCostType,
   type MasterDataRowFor,
   type MasterDataTab,
 } from "./masterDataTypes";
@@ -65,11 +69,14 @@ const byName = (a: string, b: string) =>
 /**
  * One tab's rows.
  *
- * Three of the four are a plain GET. Expense types go through a POST filter
- * instead, because that table carries six filters rather than none — see
- * `useExpenseTypes` below, which is the hook that screen actually uses.
+ * Three of the five are a plain GET. Expense types and invoice account
+ * mappings go through a POST search instead, because those two tables carry
+ * filters and a page rather than none — see `useExpenseTypes` and
+ * `useInvoiceAccountMappings` below, which are the hooks those screens use.
  */
-export function useMasterDataList<T extends Exclude<MasterDataTab, "expenseTypes">>(tab: T) {
+export function useMasterDataList<
+  T extends Exclude<MasterDataTab, "expenseTypes" | "invoiceAccountMappings">,
+>(tab: T) {
   const { isSignedIn } = useAsgardeo();
   const getAccessToken = useAccessToken();
   const configured = isFinanceMasterDataBackendConfigured();
@@ -214,6 +221,109 @@ export function useExpenseTypeAutoComplete(enabled = true) {
           await getAccessToken(),
         ),
       ),
+    staleTime: 30 * 60 * 1000,
+    retry: financeRetry,
+  });
+}
+
+/**
+ * The cost types an invoice account mapping may be filed under.
+ *
+ * Eight fixed rows, one of which — "Currency (per diem / allowances)" — is
+ * what makes a mapping a per diem mapping rather than a travel invoice one.
+ * Sorted by name on arrival so the picker reads in one order wherever it is
+ * shown.
+ */
+export function useInvoiceCostTypes(enabled = true) {
+  const { isSignedIn } = useAsgardeo();
+  const getAccessToken = useAccessToken();
+  const configured = isFinanceMasterDataBackendConfigured();
+
+  return useQuery<InvoiceCostType[]>({
+    queryKey: ["finance-master-data", "invoice-cost-types"],
+    enabled: enabled && isSignedIn && configured,
+    queryFn: async () => {
+      const rows = await authedGet<InvoiceCostType[]>(
+        financeMasterDataServiceUrls.invoiceCostTypes,
+        await getAccessToken(),
+      );
+      return [...(rows ?? [])].sort((a, b) => byName(a.name, b.name));
+    },
+    // A lookup table, not one maintained on these screens.
+    staleTime: 30 * 60 * 1000,
+    retry: financeRetry,
+  });
+}
+
+/**
+ * Invoice account mappings matching a filter — POST
+ * `invoice-account-mappings/search`.
+ *
+ * Every filter, the search term and the page are part of the request, so the
+ * rows that come back are the answer rather than something to narrow further
+ * here. Answers with a page and the total that page was taken from, which is
+ * what lets the grid show a page count it did not have to count itself.
+ */
+export function useInvoiceAccountMappings(filters: InvoiceAccountMappingFilter = {}, enabled = true) {
+  const { isSignedIn } = useAsgardeo();
+  const getAccessToken = useAccessToken();
+  const configured = isFinanceMasterDataBackendConfigured();
+
+  return useQuery<InvoiceAccountMappingPage>({
+    // The filter object is part of the key, so going back to a previous set
+    // of filters is served from cache instead of re-queried.
+    queryKey: ["finance-master-data", "invoiceAccountMappings", filters],
+    enabled: enabled && isSignedIn && configured,
+    queryFn: async () => {
+      // `authedPost` widens to `T | null` for the endpoints that answer 201
+      // with no body. This one always returns a page, and an absent body
+      // means no matches — an empty table, not a failed query.
+      const page = await authedPost<InvoiceAccountMappingPage>(
+        financeMasterDataServiceUrls.searchInvoiceAccountMappings,
+        await getAccessToken(),
+        filters,
+      );
+      return page ?? { mappings: [], totalCount: 0 };
+    },
+    // Hold the last page on screen while the next one loads. Without it an
+    // uncached page renders a totalCount of 0, and a grid with no page count
+    // moves back to page one, which then answers the request.
+    placeholderData: keepPreviousData,
+    staleTime: REFERENCE_STALE_TIME,
+    retry: financeRetry,
+  });
+}
+
+/**
+ * The option lists behind the mapping filters AND that tab's form.
+ *
+ * One request serves both, the way `useExpenseTypeAutoComplete` does: the
+ * engagement-code boxes inside the dialog offer the codes already in use,
+ * so a code that exists can be picked rather than retyped.
+ *
+ * Sorted once on arrival rather than at either render site, so the filter bar
+ * and the dialog show the same order.
+ */
+export function useInvoiceAccountMappingAutoComplete(enabled = true) {
+  const { isSignedIn } = useAsgardeo();
+  const getAccessToken = useAccessToken();
+  const configured = isFinanceMasterDataBackendConfigured();
+
+  return useQuery<InvoiceAccountMappingAutoComplete>({
+    queryKey: ["finance-master-data", "invoice-account-mapping-autocomplete"],
+    enabled: enabled && isSignedIn && configured,
+    queryFn: async () => {
+      const lists = await authedGet<InvoiceAccountMappingAutoComplete>(
+        financeMasterDataServiceUrls.invoiceAccountMappingAutocomplete,
+        await getAccessToken(),
+      );
+      return {
+        costTypes: [...(lists.costTypes ?? [])].sort((a, b) => byName(a.label, b.label)),
+        engagementCodes: [...(lists.engagementCodes ?? [])].sort(byName),
+        engagementCodeSuffixes: [...(lists.engagementCodeSuffixes ?? [])].sort(byName),
+        departments: [...(lists.departments ?? [])].sort(byName),
+      };
+    },
     staleTime: 30 * 60 * 1000,
     retry: financeRetry,
   });

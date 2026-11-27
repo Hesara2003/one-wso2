@@ -52,6 +52,7 @@ const answers: Record<string, unknown> = {
   "/budget-approvers?businessUnit=BU-1": [{ id: 10, name: "Budget Owner" }],
   "/budget-approvers?businessUnit=BU-1&region=REG-1": [{ id: 11, name: "Regional Owner" }],
   "/engagement-codes?businessUnit=Sales": [{ code: "ENG-1", name: "Platform" }],
+  "/procurement/team": [{ email: "sam.lee@example.com", name: "Sam Lee" }, { email: "robin.shaw@example.com", name: "Robin Shaw" }],
   "/directory/employees?query=dre": [{ email: "drew.parker@example.com", name: "Drew Parker" }, { email: "intern@example.com", name: "An Intern" }],
   "/directory/employees?query=dre&leadsOnly=true": [{ email: "drew.parker@example.com", name: "Drew Parker" }],
   "/approvals?limit=100": [
@@ -169,6 +170,41 @@ describe("the Procurement backend adapter", () => {
 
   it("searches the directory and returns people", async () => {
     expect((await api().searchDirectory("dre", false)).map((p) => p.name)).toEqual(["Drew Parker", "An Intern"]);
+  });
+
+  it("adds a collaborator by email, and takes one off", async () => {
+    authedPost.mockResolvedValue(null);
+    authedDelete.mockResolvedValue(undefined);
+    await api().addCollaborator("7", "kim@example.com");
+    await api().removeCollaborator("7", "kim@example.com");
+    expect(authedPost.mock.calls).toEqual([["/requests/7/collaborators", "token", { email: "kim@example.com" }]]);
+    expect(authedDelete.mock.calls.map((c) => c[0])).toEqual(["/requests/7/collaborators/kim%40example.com"]);
+  });
+
+  it("replaces the budget details of a request, sending a blank one as none", async () => {
+    authedPut.mockResolvedValue(null);
+    await api().changeBudget("7", {
+      budget: { category: "CAT-1", businessUnit: "BU-1", product: "", region: "REG-1", engagementCode: "ENG-1", salesforceCampaign: "ignored" },
+      budgetApproverId: "10",
+    });
+    expect(authedPut).toHaveBeenCalledWith("/requests/7/budget", "token", {
+      budgetCategoryCode: "CAT-1",
+      businessUnitCode: "BU-1",
+      productCode: null,
+      regionCode: "REG-1",
+      engagementCode: "ENG-1",
+      budgetApproverId: 10,
+    });
+    await api().changeBudget("7", { budget: { category: "", businessUnit: "", product: "", region: "", engagementCode: "", salesforceCampaign: "" }, budgetApproverId: "" });
+    expect(authedPut.mock.calls[1][2]).toMatchObject({ budgetCategoryCode: null, budgetApproverId: null });
+  });
+
+  it("lists the Procurement team's members as people, for the assignee dropdown", async () => {
+    expect(await api().listTeamMembers()).toEqual([
+      { id: "sam.lee@example.com", name: "Sam Lee", email: "sam.lee@example.com" },
+      { id: "robin.shaw@example.com", name: "Robin Shaw", email: "robin.shaw@example.com" },
+    ]);
+    expect(asked()).toEqual(["/procurement/team"]);
   });
 
   it("asks the backend for leads only when that is wanted, so the answer holds only people who can approve", async () => {
@@ -363,6 +399,12 @@ describe("the Procurement backend adapter", () => {
     });
   });
 
+  it("names another team lead for a request, by email", async () => {
+    authedPut.mockResolvedValue({ id: 7, status: "PENDING_APPROVAL" });
+    await api().changeTeamLead("7", "drew.parker@example.com");
+    expect(authedPut).toHaveBeenCalledWith("/requests/7/team-lead", "token", { email: "drew.parker@example.com" });
+  });
+
   it("cancels a request", async () => {
     authedPost.mockResolvedValue(null);
     await api().cancelRequest("7");
@@ -379,6 +421,35 @@ describe("the Procurement backend adapter", () => {
     authedPost.mockResolvedValue(null);
     await api().decideRequest("7", { decision: "approved", comment: "", disclaimerAccepted: true });
     expect(authedPost).toHaveBeenCalledWith("/requests/7/decision", "token", { decision: "APPROVED", comment: null, disclaimerAccepted: true });
+  });
+
+  it("finds the requests assigned to one person on every page of the queue, since the backend cannot filter by assignee", async () => {
+    const row = (id: number, assignee: string | null) => ({
+      id, referenceNo: `PR-2026-${id}`, title: `Request ${id}`, category: "NON_IT", status: "ASSIGNED", version: 1, submittedOn: null,
+      updatedOn: "2026-11-01T00:00:00Z", priority: null, assigneeEmail: assignee, requesterName: "Alex Morgan", requesterEmail: "alex@example.com",
+    });
+    answers["/procurement/requests?limit=100&status=ASSIGNED"] = Array.from({ length: 100 }, (_, i) => row(i + 1, i === 3 ? "pat@example.com" : "sam@example.com"));
+    answers["/procurement/requests?limit=100&status=ASSIGNED&offset=100"] = [row(101, "PAT@example.com"), row(102, "sam@example.com")];
+    const mine = await api().listTeamQueue({ status: "assigned", assignee: "Pat@example.com" });
+    expect(mine.map((r) => r.id)).toEqual(["4", "101"]);
+    expect(asked()).toEqual(["/procurement/requests?limit=100&status=ASSIGNED", "/procurement/requests?limit=100&status=ASSIGNED&offset=100"]);
+  });
+
+  it("says the search is incomplete when every permitted page was full, instead of returning what it found as the whole answer", async () => {
+    const row = (id: number) => ({
+      id, referenceNo: `PR-2026-${id}`, title: `Request ${id}`, category: "NON_IT", status: "ASSIGNED", version: 1, submittedOn: null,
+      updatedOn: "2026-11-01T00:00:00Z", priority: null, assigneeEmail: "sam@example.com", requesterName: "Alex Morgan", requesterEmail: "alex@example.com",
+    });
+    for (let page = 0; page < 50; page += 1) {
+      answers[`/procurement/requests?limit=100&status=ASSIGNED${page > 0 ? `&offset=${page * 100}` : ""}`] = Array.from({ length: 100 }, (_, i) => row(page * 100 + i + 1));
+    }
+    await expect(api().listTeamQueue({ status: "assigned", assignee: "pat@example.com" })).rejects.toThrow(/too many requests/);
+    expect(asked()).toHaveLength(50);
+  });
+
+  it("stops reading the queue at the first page that is not full, and reads only one page when no assignee is asked for", async () => {
+    await api().listTeamQueue({ status: "assigned", priority: "P1" });
+    expect(asked()).toEqual(["/procurement/requests?limit=100&status=ASSIGNED&priority=P1"]);
   });
 
   it("lists the Procurement queue, narrowed by stage and priority when asked", async () => {

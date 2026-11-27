@@ -26,10 +26,17 @@ import {
   DialogTitle,
   FormControlLabel,
   Switch,
+  Typography,
 } from "@wso2/oxygen-ui";
 import { useNotifications } from "@context/notifications/NotificationsContext";
 import { MASTER_DATA_FORM_COPY, MASTER_DATA_SNACK } from "./masterDataUiText";
-import { changedFields, initialFormData, isFormComplete, isUnchanged } from "./masterDataForm";
+import {
+  changedFields,
+  initialFormData,
+  invalidEngagementCodes,
+  isFormComplete,
+  isUnchanged,
+} from "./masterDataForm";
 import {
   CreditCardNumberInput,
   IdSelectInput,
@@ -51,6 +58,9 @@ import {
   type ExpenseTypeAutoComplete,
   type ExpenseTypePayload,
   type GlCode,
+  type InvoiceAccountMappingAutoComplete,
+  type InvoiceAccountMappingPayload,
+  type InvoiceCostType,
   type MasterDataPayload,
   type MasterDataRow,
   type MasterDataTab,
@@ -58,11 +68,36 @@ import {
 } from "./masterDataTypes";
 
 /**
- * Add / edit, for all four tabs.
+ * The mapping form, one field per row.
  *
- * One dialog rather than four: the submit path, the enable rule and the
- * snackbars are identical across tabs, and only the field list differs. The
- * field list is the `switch` at the bottom.
+ * Read top to bottom like the other four tabs, but kept short enough to sit
+ * on screen whole: no field is allowed to grow, the account details are one
+ * line rather than three boxes, and the two rules about the code fields are
+ * one line rather than two alerts.
+ */
+const MAPPING_FORM_SX = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  rowGap: 0.5,
+} as const;
+
+/**
+ * The tabs whose status toggle sits between the dialog content and its
+ * actions, rather than at the foot of the field list.
+ *
+ * Only the mapping form, which is the long one: there the toggle fell below
+ * the fold, so the one control a reader goes looking for when they want a
+ * mapping retired was the one they had to scroll to find. The shorter forms
+ * have room for it in the field list and keep it there.
+ */
+const STATUS_BELOW_CONTENT: readonly MasterDataTab[] = ["invoiceAccountMappings"];
+
+/**
+ * Add / edit, for every tab.
+ *
+ * One dialog rather than one per tab: the submit path, the enable rule and
+ * the snackbars are identical across them, and only the field list differs.
+ * The field list is the `switch` at the bottom.
  *
  * Submit is enabled only when the form is complete AND — when editing —
  * something has actually changed. Pressing it on an unchanged record would
@@ -75,6 +110,8 @@ export default function MasterDataFormDialog({
   glCodes,
   autoComplete,
   employeeEmails,
+  costTypes,
+  mappingAutoComplete,
   onClose,
 }: {
   tab: MasterDataTab;
@@ -87,6 +124,10 @@ export default function MasterDataFormDialog({
   autoComplete?: ExpenseTypeAutoComplete;
   /** Credit-card form's employee + lead pickers. */
   employeeEmails?: string[];
+  /** Invoice-account-mapping form's Cost Type dropdown. */
+  costTypes?: InvoiceCostType[];
+  /** Invoice-account-mapping form's engagement code and suffix option lists. */
+  mappingAutoComplete?: InvoiceAccountMappingAutoComplete;
   onClose: () => void;
 }) {
   const isCreate = !row;
@@ -104,7 +145,7 @@ export default function MasterDataFormDialog({
   const [form, setForm] = useState<MasterDataPayload>(() => initialFormData(tab, row));
 
   const pending = create.isPending || update.isPending;
-  const complete = isFormComplete(tab, form);
+  const complete = isFormComplete(tab, form, row);
   const unchanged = row ? isUnchanged(row, form) : false;
   const canSubmit = complete && !unchanged && !pending;
 
@@ -119,6 +160,13 @@ export default function MasterDataFormDialog({
       }
       return { ...prev, [key]: value };
     });
+
+  // Several fields at once, for a picker that fills in more than its own box:
+  // the mapping form's GL Code reports the account number, name and internal
+  // ID together, and setting them one at a time would be three renders in
+  // which the form is briefly inconsistent.
+  const setMany = (patch: Record<string, string | number | string[]>) =>
+    setForm((prev) => ({ ...prev, ...patch }));
 
   const handleSubmit = () => {
     if (!canSubmit) return;
@@ -161,13 +209,20 @@ export default function MasterDataFormDialog({
         <Fields
           tab={tab}
           form={form}
+          row={row}
           set={set}
+          setMany={setMany}
           glCodes={glCodes}
           autoComplete={autoComplete}
           employeeEmails={employeeEmails}
+          costTypes={costTypes}
+          mappingAutoComplete={mappingAutoComplete}
           countryCurrency={countries.data ?? {}}
         />
       </DialogContent>
+      {STATUS_BELOW_CONTENT.includes(tab) && (
+        <StatusToggle value={(form as { status?: string }).status} onChange={set} belowContent />
+      )}
       <DialogActions>
         <Button onClick={onClose} disabled={pending} color="inherit">
           Cancel
@@ -189,18 +244,27 @@ export default function MasterDataFormDialog({
 function Fields({
   tab,
   form,
+  row,
   set,
+  setMany,
   glCodes,
   autoComplete,
   employeeEmails,
+  costTypes,
+  mappingAutoComplete,
   countryCurrency,
 }: {
   tab: MasterDataTab;
   form: MasterDataPayload;
+  /** The record being edited, or absent while creating. */
+  row?: MasterDataRow;
   set: (key: string, value: string | number | string[]) => void;
+  setMany: (patch: Record<string, string | number | string[]>) => void;
   glCodes?: GlCode[];
   autoComplete?: ExpenseTypeAutoComplete;
   employeeEmails?: string[];
+  costTypes?: InvoiceCostType[];
+  mappingAutoComplete?: InvoiceAccountMappingAutoComplete;
   /** ISO 4217 currency code by country. */
   countryCurrency: Readonly<Record<string, string>>;
 }) {
@@ -345,6 +409,153 @@ function Fields({
       );
     }
 
+    case "invoiceAccountMappings": {
+      const f = form as InvoiceAccountMappingPayload;
+      const costTypeOptions = (costTypes ?? []).map((c) => ({ id: c.id, label: c.name }));
+
+      // The mapping stores the NetSuite account's number, name and internal
+      // ID as three loose columns, and all three come from one row of the GL
+      // code table. So they are reported by a single GL Code picker rather
+      // than typed into three boxes that can disagree with each other, and
+      // with NetSuite, one character at a time.
+      //
+      // Labelled with the code and the account name, because the
+      // Autocomplete filters on the label and someone adding a mapping knows
+      // "the sponsorship account" more often than its number.
+      const glCodeOptions = (glCodes ?? []).map((g) => ({
+        id: g.id,
+        label: g.glAccountName ? `${g.glCode} - ${g.glAccountName}` : g.glCode,
+      }));
+      // Resolved back out of the stored account number rather than kept as
+      // its own state, so there is one source of truth and an existing row
+      // opens with its GL code already shown. `glCodeId` is deliberately not
+      // part of the payload: the backend stores the three columns, not the
+      // reference, and sending it would be a 400 on a closed record.
+      const pickedGlCode = (glCodes ?? []).find((g) => g.glCode === f.accountNumber);
+      // A row written before this picker existed can carry an account number
+      // that matches no GL code. Its stored values are still shown and the
+      // rest of the row stays editable.
+      // Only once the GL codes have arrived. Until then nothing matches, and
+      // saying so would flash on every edit of a perfectly ordinary mapping.
+      const unmatchedAccount =
+        glCodes !== undefined && !pickedGlCode && f.accountNumber.trim().length > 0;
+
+      const applyGlCode = (glCodeId: number) => {
+        const picked = (glCodes ?? []).find((g) => g.id === glCodeId);
+        if (!picked) {
+          setMany({ accountNumber: "", accountClassification: "", internalId: "", department: "" });
+          return;
+        }
+        setMany({
+          accountNumber: picked.glCode,
+          accountClassification: picked.glAccountName,
+          internalId: String(picked.internalId),
+          // `costCenter` is the GL code table's own `department` column, and
+          // it is the whole of what the Department field below shows.
+          department: picked.costCenter ?? "",
+        });
+      };
+
+      // Some GL codes carry no department, and a blank one is a real value
+      // on this table rather than a gap, so an empty box has to read as an
+      // answer instead of an unfilled field.
+      const departmentHelp = !f.department
+        ? pickedGlCode
+          ? "This GL code has no department."
+          : "Filled in from the GL code."
+        : undefined;
+
+      const badCodes = invalidEngagementCodes(f, row);
+      return (
+        <Box sx={MAPPING_FORM_SX}>
+          <IdSelectInput
+            id="invCostTypeId"
+            label="Cost Type"
+            value={f.invCostTypeId}
+            options={costTypeOptions}
+            required
+            onChange={set}
+          />
+          <IdSelectInput
+            id="glCodeId"
+            label="GL Code"
+            value={pickedGlCode?.id ?? 0}
+            options={glCodeOptions}
+            required
+            onChange={(_id, value) => applyGlCode(value)}
+          />
+
+          {/* The account the GL Code resolves to, on one line. These are not
+              inputs any more, they are confirmation of what the picker just
+              filled in, and three full-width boxes of them were most of the
+              reason this form had to be scrolled. */}
+          {f.accountNumber.trim().length > 0 && (
+            <Box sx={{ px: 1.5, py: 0.75, borderRadius: 1, bgcolor: "action.hover" }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                {f.accountClassification || "-"}
+              </Typography>
+              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                Account {f.accountNumber}
+                {f.internalId ? ` \u00b7 NetSuite internal ID ${f.internalId}` : ""}
+                {unmatchedAccount ? " \u00b7 not one of the GL codes on file" : ""}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Filled in by the GL Code picker above rather than typed. The
+              department a mapping posts to is a property of the NetSuite
+              account, so one entered here by hand could only disagree with
+              it. Still shown, because it is stored on the mapping and read
+              back in the table's Department column. */}
+          <TextInput
+            id="department"
+            label="Department"
+            value={f.department}
+            required={false}
+            disabled
+            helperText={departmentHelp}
+            onChange={() => {}}
+          />
+
+          <MultiSelectInput
+            id="engagementCodes"
+            label="Engagement Codes"
+            values={f.engagementCodes}
+            options={mappingAutoComplete?.engagementCodes ?? []}
+            required={false}
+            hideHelper
+            scrollChips
+            onChange={set}
+          />
+          <MultiSelectInput
+            id="engagementCodeSuffixes"
+            label="Engagement Code Suffixes"
+            values={f.engagementCodeSuffixes}
+            options={mappingAutoComplete?.engagementCodeSuffixes ?? []}
+            required={false}
+            hideHelper
+            scrollChips
+            onChange={set}
+          />
+
+          {/* One line in place of two Alert boxes. Both rules are about the
+              pair of fields above, and two bordered boxes to say so cost
+              more height than the fields they were explaining. */}
+          <Typography
+            sx={{
+              fontSize: 12,
+              lineHeight: 1.45,
+              color: badCodes.length > 0 ? "error.main" : "text.secondary",
+            }}
+          >
+            {badCodes.length > 0
+              ? `Cannot be saved as typed: ${badCodes.join(" \u00b7 ")}. Use letters, digits, hyphens, dots or underscores only, one code per entry.`
+              : "Fill in at least one field, pressing Enter after each value. A suffix is matched on the engagement code's second part, so RND-GEN is found for RND-GEN-INT."}
+          </Typography>
+        </Box>
+      );
+    }
+
     case "creditCards": {
       const f = form as CreditCardPayload;
       const emails = employeeEmails ?? [];
@@ -398,10 +609,10 @@ function Fields({
 }
 
 /**
- * Active / inactive, for the two tabs that retire a record by status.
+ * Active / inactive, for the three tabs that retire a record by status.
  *
- * Renders nothing while creating — `value` is absent in exactly that case,
- * the status being no part of either Add payload. See `initialFormData`.
+ * Renders nothing while creating: `value` is absent in exactly that case,
+ * the status being no part of any Add payload. See `initialFormData`.
  *
  * Either direction can be refused with a 409: retiring an expense type that
  * active claims still carry, and reactivating one whose Gl code is inactive.
@@ -409,15 +620,21 @@ function Fields({
 function StatusToggle({
   value,
   onChange,
+  belowContent = false,
 }: {
   value?: string;
   onChange: (key: string, value: string) => void;
+  /**
+   * Padded for sitting between the dialog content and its actions, instead
+   * of spaced for the foot of the field list. See `STATUS_BELOW_CONTENT`.
+   */
+  belowContent?: boolean;
 }) {
   if (value === undefined) return null;
   const active = value === MASTER_DATA_STATUS.active;
   return (
     <FormControlLabel
-      sx={{ mt: 0.5 }}
+      sx={belowContent ? { px: 3, py: 1.5, mr: 0 } : { mt: 0.5 }}
       control={
         <Switch
           checked={active}

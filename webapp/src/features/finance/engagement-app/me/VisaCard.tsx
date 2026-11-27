@@ -19,7 +19,6 @@ import { Link as RouterLink } from "react-router";
 import { Box, ButtonBase, Card, Typography } from "@wso2/oxygen-ui";
 import ErrorNotice from "@components/error-notice/ErrorNotice";
 import { isEngagementAppBackendConfigured } from "@config/apiConfig";
-import { isPreviewEnabled } from "@config/previewFeatures";
 import { tripsWaiting } from "../api/dashboardMappers";
 import type { TripVisa } from "../api/dashboardTypes";
 import { useMyOverview } from "../api/useEngagementApi";
@@ -56,7 +55,7 @@ function Row({ trip }: { trip: TripVisa }): JSX.Element {
 
 /** The Me overview's visa card: upcoming trips with the visa each needs, and how many are waiting for one. Draws nothing when there are no upcoming trips. */
 export default function VisaCard(): JSX.Element | null {
-  const on = isPreviewEnabled("engagementApp") && isEngagementAppBackendConfigured();
+  const on = isEngagementAppBackendConfigured();
   const info = useEngagementUserInfo(on);
   const access = engagementAccess(info.data);
   const enabled = on && info.isSuccess && access.myTravelRequests;
@@ -65,9 +64,9 @@ export default function VisaCard(): JSX.Element | null {
   if (overview.isError) {
     return (
       <Card variant="outlined" sx={{ ...EA_SCOPE_SX, p: 2 }}>
-        <Typography sx={{ ...CAP, mb: 1.5 }}>Visas for Upcoming Trips</Typography>
+        <Typography sx={{ ...CAP, mb: 1.5 }}>Visas for Upcoming Travels</Typography>
         <ErrorNotice error={overview.error} onRetry={() => void overview.refetch()} retrying={overview.isFetching}>
-          Couldn&apos;t load the visas for your upcoming trips.
+          Couldn&apos;t load the visas for your upcoming travels.
         </ErrorNotice>
       </Card>
     );
@@ -77,10 +76,10 @@ export default function VisaCard(): JSX.Element | null {
   const waiting = tripsWaiting(trips);
   return (
     <Card variant="outlined" sx={{ ...EA_SCOPE_SX, p: 2, display: "flex", flexDirection: "column" }}>
-      <Typography sx={{ ...CAP, mb: 1 }}>Visas for Upcoming Trips</Typography>
+      <Typography sx={{ ...CAP, mb: 1 }}>Visas for Upcoming Travels</Typography>
       <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: 0.75 }}>
         <Typography sx={{ fontSize: 22, fontWeight: 650, lineHeight: 1.15, color: waiting ? "text.primary" : "text.disabled" }}>{n0(waiting)}</Typography>
-        <Typography sx={{ fontSize: 12.5, color: "text.secondary", fontWeight: 500 }}>Trips Waiting for a Visa</Typography>
+        <Typography sx={{ fontSize: 12.5, color: "text.secondary", fontWeight: 500 }}>Travels Waiting for a Visa</Typography>
       </Box>
       {trips.slice(0, 5).map((t) => (
         <Row key={t.jobNumber} trip={t} />

@@ -141,11 +141,11 @@ describe("the Procurement sample data", () => {
 
   it("queues the approved requests, and lets the team assign, unassign and prioritise one that is not the user's own", async () => {
     const api = createMockProcurementApi(user);
-    expect((await api.listTeamQueue()).map((r) => r.id).sort()).toEqual(["approval-2", "seed-3"]);
+    expect((await api.listTeamQueue()).map((r) => r.id).sort()).toEqual(["approval-2", "seed-3", "team-1", "team-2"]);
     await expect(api.assignRequest("seed-3")).rejects.toThrow(/your own request/);
     await api.assignRequest("approval-2");
     expect(await api.getRequest("approval-2")).toMatchObject({ status: "assigned", assignee: user.email });
-    expect((await api.listTeamQueue({ status: "assigned" })).map((r) => r.id)).toEqual(["approval-2"]);
+    expect((await api.listTeamQueue({ status: "assigned" })).map((r) => r.id).sort()).toEqual(["approval-2", "team-2"]);
     await api.setPriority("approval-2", "P1");
     expect((await api.listTeamQueue({ priority: "P1" })).map((r) => r.id)).toEqual(["approval-2"]);
     await api.unassignRequest("approval-2");
@@ -157,6 +157,41 @@ describe("the Procurement sample data", () => {
     const api = createMockProcurementApi(user);
     await api.setPriority("seed-3", "P2");
     await api.setPriority("approval-2", "P1");
-    expect((await api.listTeamQueue()).map((r) => r.id)).toEqual(["approval-2", "seed-3"]);
+    expect((await api.listTeamQueue()).map((r) => r.id)).toEqual(["approval-2", "seed-3", "team-2", "team-1"]);
+  });
+
+  it("lets the requester name another team lead while the request waits for its first decision, and refuses what the backend refuses", async () => {
+    const api = createMockProcurementApi(user);
+    await expect(api.changeTeamLead("seed-1", "casey.lane@example.com")).rejects.toThrow(/active team lead/);
+    await expect(api.changeTeamLead("seed-1", "alex.morgan@example.com")).resolves.toBeUndefined();
+    expect((await api.getRequest("seed-1")).teamLead?.email).toBe("alex.morgan@example.com");
+    await expect(api.changeTeamLead("seed-1", "alex.morgan@example.com")).rejects.toThrow(/cannot be the team lead/);
+    await expect(api.changeTeamLead("seed-3", "alex.morgan@example.com")).rejects.toThrow(/no longer waits/);
+    await expect(api.changeTeamLead("approval-1", "alex.morgan@example.com")).rejects.toThrow(/Only the requester/);
+  });
+
+  it("lists only the requests assigned to a person when asked, whatever the case of the email", async () => {
+    const api = createMockProcurementApi(user);
+    expect((await api.listTeamQueue({ assignee: "BLAKE.RIVERS@example.com" })).map((r) => r.id)).toEqual(["team-2"]);
+    expect(await api.listTeamQueue({ assignee: "nobody@example.com" })).toEqual([]);
+  });
+
+  it("gives each read of a request as a new object, so a save that changes it is seen as new data", async () => {
+    const api = createMockProcurementApi(user);
+    const before = await api.getRequest("team-1");
+    await api.addCollaborator("team-1", "kim@example.com");
+    const after = await api.getRequest("team-1");
+    expect(after).not.toBe(before);
+    expect(after.collaborators).toEqual(["kim@example.com"]);
+    expect(before.collaborators).toEqual([]);
+  });
+
+  it("has requests that someone else raised and approved, which the user can handle and whose budget they can change", async () => {
+    const api = createMockProcurementApi(user);
+    await api.assignRequest("team-1");
+    expect(await api.getRequest("team-1")).toMatchObject({ status: "assigned", assignee: user.email });
+    const budget = (await api.getRequest("team-1")).budget;
+    await api.changeBudget("team-1", { budget: { ...budget, engagementCode: "ENG-2041" }, budgetApproverId: "10" });
+    expect((await api.getRequest("team-1")).budget.engagementCode).toBe("ENG-2041");
   });
 });

@@ -159,7 +159,7 @@ function Row({
   );
 }
 
-function Section({ title, onEdit, children }: { title: string; onEdit?: () => void; children: ReactNode }) {
+function Section({ title, onEdit, action, children }: { title: string; onEdit?: () => void; action?: ReactNode; children: ReactNode }) {
   return (
     <Card variant="outlined">
       <CardContent>
@@ -172,6 +172,7 @@ function Section({ title, onEdit, children }: { title: string; onEdit?: () => vo
               Edit
             </Button>
           )}
+          {action}
         </Stack>
         {children}
       </CardContent>
@@ -291,13 +292,19 @@ function EventRows({ e }: { e: EventDetails }) {
  * reviewer finds each answer where it was given.
  *
  * @param onEditStep - When given, each card offers Edit and calls it with the form step that holds it
+ * @param budgetAction - Shown at the top of the Budget card, for a control that changes the budget details
+ * @param requesterAction - Shown at the top of the Requester card, for a control that changes the team lead
  */
 export default function RequestSummary({
   view,
   onEditStep,
+  budgetAction,
+  requesterAction,
 }: {
   view: RequestView;
   onEditStep?: (step: number) => void;
+  budgetAction?: ReactNode;
+  requesterAction?: ReactNode;
 }) {
   const edit = (step: number) => (onEditStep ? () => onEditStep(step) : undefined);
   const { budget: b } = view;
@@ -313,7 +320,7 @@ export default function RequestSummary({
         {view.date && <Chip size="small" variant="outlined" label={`${view.date.label} ${formatDate(view.date.iso)}`} />}
       </Stack>
 
-      <Section title="Requester" onEdit={edit(1)}>
+      <Section title="Requester" onEdit={edit(1)} action={requesterAction}>
         <Row label="Requester" value={view.requester.name} />
         <Row label="Email" value={view.requester.email} />
         <Row label="Team lead (for approval)" value={view.teamLead ? joined(view.teamLead.name, view.teamLead.email) : ""} optional />
@@ -349,7 +356,7 @@ export default function RequestSummary({
         </Section>
       )}
 
-      <Section title="Budget" onEdit={edit(4)}>
+      <Section title="Budget" onEdit={edit(4)} action={budgetAction}>
         <Row label="Budget category" value={b.category} optional={budgetOptional} />
         <Row label="Business unit" value={b.businessUnit} optional={budgetOptional} />
         <Row label="Product" value={b.product} optional={budgetOptional} />

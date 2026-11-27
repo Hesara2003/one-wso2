@@ -21,6 +21,7 @@ import DecisionNotice from "../../components/DecisionNotice";
 import { RequestStatusChip } from "../../components/ProcurementChips";
 import SavedRequestSummary from "../../components/SavedRequestSummary";
 import { useProcurementMe, useRequest } from "../../api/useProcurement";
+import BudgetEdit from "../components/BudgetEdit";
 import HandlingPanel from "../components/HandlingPanel";
 import { workspacePaths } from "../workspacePaths";
 
@@ -56,8 +57,20 @@ export default function TeamRequestPage() {
       {data && (
         <Stack spacing={2}>
           <DecisionNotice request={data} />
+          {handling && !me.data && me.isError && (
+            <Alert
+              severity="error"
+              action={
+                <Button color="inherit" size="small" onClick={() => void me.refetch()}>
+                  Retry
+                </Button>
+              }
+            >
+              Who you are could not be read, so the assignment and budget controls are hidden. {describeError(me.error)}
+            </Alert>
+          )}
           {handling && me.data && <HandlingPanel request={data} me={me.data.email} />}
-          <SavedRequestSummary request={data} />
+          <SavedRequestSummary request={data} budgetAction={handling && me.data ? <BudgetEdit request={data} me={me.data.email} /> : undefined} />
         </Stack>
       )}
     </>

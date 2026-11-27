@@ -231,15 +231,10 @@ export const parBackendUrl: string =
   window.config?.ONE_WSO2_PAR_BACKEND_URL ?? "";
 
 // The Lead Portal's evidence-attachment picker (ParLeadReviewPanel.tsx) is
-// the only caller — a plain OAuth client ID, not a backend URL, so it lives
-// here rather than in parServiceUrls.
+// the only caller. The PAR backend sends its own client ID (parAppConfig
+// below); this one is used only when it doesn't.
 export const googleOAuthClientId: string =
   window.config?.ONE_WSO2_PAR_GOOGLE_OAUTH_CLIENT_ID ?? "";
-// Optional — par-app's own useGoogleDrivePicker.ts never calls
-// PickerBuilder.setDeveloperKey either and works without it. Only needed if
-// Google's "API developer key is invalid" error shows up in practice.
-export const googlePickerApiKey: string =
-  window.config?.ONE_WSO2_PAR_GOOGLE_PICKER_API_KEY ?? "";
 
 // The ratings that unlock Top 5%/20% and need evidence, for deployments
 // where `par2` is off: there the cycle doesn't carry its own rating rules
@@ -259,6 +254,9 @@ export const parServiceUrls = {
   // par-app's own backend rather than assumed from a different one's org
   // chart. Self-lookup is allowed (isSelf in service.bal).
   parEmployeeInfo: (workEmail: string) => `${parBackendUrl}/employees/${encodeURIComponent(workEmail)}`,
+  // GET /meta/app-config — the settings the web app takes from the PAR
+  // deployment (the Drive picker's Google OAuth client ID). Anyone signed in.
+  parAppConfig: () => `${parBackendUrl}/meta/app-config`,
   // GET /par-cycles?email=<workEmail>&status=OPEN — returns ParCycle[] for
   // the caller's own active review cycles. Non-lead/non-admin callers can
   // only query their own email.
@@ -406,6 +404,7 @@ export const parServiceUrls = {
   // Same resource edits cycle settings and drives OPEN/CLOSED transitions.
   parCycleModify: (parCycleId: number) => `${parBackendUrl}/par-cycles/${parCycleId}`,
   parGlobalConfig: () => `${parBackendUrl}/meta/configurations`,
+  parDepartments: () => `${parBackendUrl}/meta/departments`,
   parAdminTeams: (parCycleId: number) => `${parBackendUrl}/par-cycles/${parCycleId}/teams`,
   parAdminSpecialRatingGroups: (parCycleId: number) =>
     `${parBackendUrl}/par-cycles/${parCycleId}/special-rating-groups`,
@@ -664,8 +663,8 @@ export function isFinanceMasterDataBackendConfigured(): boolean {
 
 export const financeMasterDataServiceUrls = {
   userInfo: `${financeMasterDataBackendUrl}/user-info`,
-  // The four collections, keyed by path segment, so the item helpers below
-  // can serve all four tabs off one shared builder.
+  // The five collections, keyed by path segment, so the item helpers below
+  // can serve every tab off one shared builder.
   collection: (name: string) => `${financeMasterDataBackendUrl}/${name}`,
   item: (name: string, id: number) =>
     `${financeMasterDataBackendUrl}/${name}/${encodeURIComponent(String(id))}`,
@@ -677,6 +676,14 @@ export const financeMasterDataServiceUrls = {
   employeeEmails: `${financeMasterDataBackendUrl}/employees/email`,
   expenseTypeAutocomplete: `${financeMasterDataBackendUrl}/expense-types/autocomplete-values`,
   countries: `${financeMasterDataBackendUrl}/countries`,
+  // Invoice cost types served by ONE_WSO2_FINANCE_MASTER_DATA_BACKEND_URL.
+  invoiceCostTypes: `${financeMasterDataBackendUrl}/invoice-cost-types`,
+  // The mappings are read through a POST filter like expense types, and for
+  // the same reason: the filter carries several engagement codes at once and
+  // the page is asked for by size and offset.
+  searchInvoiceAccountMappings: `${financeMasterDataBackendUrl}/invoice-account-mappings/search`,
+  invoiceAccountMappingAutocomplete:
+    `${financeMasterDataBackendUrl}/invoice-account-mappings/autocomplete-values`,
 };
 
 // ---- Updates Manager backend ---------------------------------------------
@@ -2179,13 +2186,22 @@ export const procurementServiceUrls = {
   },
   engagementCodes: (businessUnit: string): string =>
     `${procurementBackendUrl}/engagement-codes?businessUnit=${encodeSegment(businessUnit)}`,
+  /** PUT replaces the budget details of an approved or assigned request. */
+  requestBudget: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/budget`,
+  /** POST adds a collaborator to an approved or assigned request, by email. */
+  requestCollaborators: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/collaborators`,
+  /** DELETE removes a collaborator from a request. */
+  requestCollaborator: (requestId: string, email: string): string =>
+    `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/collaborators/${encodeSegment(email)}`,
+  /** GET lists the members of the Procurement user and admin groups, for Procurement users and admins. */
+  teamMembers: `${procurementBackendUrl}/procurement/team`,
   directoryEmployees: (query: string, leadsOnly: boolean): string =>
     `${procurementBackendUrl}/directory/employees?query=${encodeSegment(query)}${leadsOnly ? "&leadsOnly=true" : ""}`,
   requests: (limit: number): string => `${procurementBackendUrl}/requests?limit=${encodeSegment(limit)}`,
   approvals: (limit: number, status?: string): string =>
     `${procurementBackendUrl}/approvals?limit=${encodeSegment(limit)}${status ? `&status=${encodeSegment(status)}` : ""}`,
-  teamQueue: (limit: number, status?: string, priority?: string): string =>
-    `${procurementBackendUrl}/procurement/requests?limit=${encodeSegment(limit)}${status ? `&status=${encodeSegment(status)}` : ""}${priority ? `&priority=${encodeSegment(priority)}` : ""}`,
+  teamQueue: (limit: number, status?: string, priority?: string, offset = 0): string =>
+    `${procurementBackendUrl}/procurement/requests?limit=${encodeSegment(limit)}${status ? `&status=${encodeSegment(status)}` : ""}${priority ? `&priority=${encodeSegment(priority)}` : ""}${offset > 0 ? `&offset=${encodeSegment(offset)}` : ""}`,
   assignRequest: (requestId: string, email?: string): string =>
     `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/assign${email ? `/${encodeSegment(email)}` : ""}`,
   unassignRequest: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/unassign`,
@@ -2195,6 +2211,8 @@ export const procurementServiceUrls = {
   request: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}`,
   submitRequest: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/submit`,
   cancelRequest: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/cancel`,
+  /** PUT names another team lead for a request that waits for its first decision. */
+  requestTeamLead: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/team-lead`,
   /** GET lists a request's files; POST attaches one. */
   attachments: (requestId: string): string => `${procurementBackendUrl}/requests/${encodeSegment(requestId)}/attachments`,
   /** GET downloads one file of a request; DELETE removes it. */
@@ -2400,7 +2418,7 @@ export const cado2ServiceUrls = {
 // (Finance → Engagement App, and its pages under Me). Its own Go backend, the
 // Engagement App Backend, configured with the version segment included. Unset
 // means "not connected": the pages say so and make no requests. Gated as a
-// whole by the `engagementApp` preview flag as well (previewFeatures.ts).
+//
 //
 // Paths are finance-tools apps/engagement-app/backend/openapi.yaml (0.2.0).
 export const engagementAppBackendUrl: string = stripTrailingSlashes(
@@ -2447,6 +2465,8 @@ export const engagementServiceUrls = {
   campaigns: (search: string): string => ea("/campaigns", { search, limit: 20 }),
   employees: (search: string, limit = 20): string => ea("/employees", { search, limit }),
   dashboard: ea("/dashboard"),
+  /** Global search: up to `limit` hits per kind of record, for the kinds the caller may open. */
+  search: (q: string, limit: number): string => ea("/search", { q, limit }),
   // An explicit empty `sections` is the widget catalogue alone: the date and the widgets, with no section computed.
   dashboardCatalogue: `${engagementAppBackendUrl}/dashboard?sections=`,
   /** The dashboard with only these sections (a widget the caller turned on that is not on by default). */

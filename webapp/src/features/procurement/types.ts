@@ -26,6 +26,9 @@ export type ProcurementCategory = "IT" | "NON-IT" | "EVENTS";
  * the approvers; `approved` waits for Procurement to assign it; `assigned` is
  * where phase 1 ends; `cancelled` was withdrawn by the requester.
  */
+/** The most collaborators the backend keeps on a request. */
+export const MAX_COLLABORATORS = 20;
+
 export type RequestStatus = "draft" | "submitted" | "approved" | "rejected" | "assigned" | "cancelled";
 
 export type YesNo = "yes" | "no";
@@ -213,6 +216,13 @@ export interface AttachmentsDraft {
   removed: string[];
   /** The files chosen and not yet uploaded. */
   files: File[];
+}
+
+/** The budget details Procurement may change after a request is approved, which replace the old ones. */
+export interface BudgetChange {
+  budget: BudgetDetails;
+  /** The chosen budget approver's id, or "" when none. */
+  budgetApproverId: string;
 }
 
 /** What the requester fills in. The requester, team lead, status and dates are set by the server, never sent. */

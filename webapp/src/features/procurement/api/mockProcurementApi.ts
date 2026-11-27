@@ -33,6 +33,7 @@ import type {
   PurchaseRequest,
   PurchaseRequestInput,
 } from "../types";
+import { MAX_COLLABORATORS } from "../types";
 import { emptyDetails, emptyEvent } from "../request-form/requestFormModel";
 import type { ProcurementApi } from "./procurementApi";
 
@@ -54,6 +55,9 @@ export const MOCK_DIRECTORY: readonly Person[] = [
 ];
 
 const TEAM_LEAD = MOCK_DIRECTORY[10];
+
+/** The sample Procurement team, taken from the sample people above. */
+const MOCK_TEAM: readonly Person[] = [MOCK_DIRECTORY[1], MOCK_DIRECTORY[3], MOCK_DIRECTORY[4]];
 
 /** People who are not leads, such as interns: the directory finds them only when leads are not asked for. */
 const NON_LEADS: ReadonlySet<string> = new Set(["casey.lane@example.com", "finley.brooks@example.com"]);
@@ -299,6 +303,64 @@ function approvalSeeds(approver: Person): PurchaseRequest[] {
   ];
 }
 
+/**
+ * Approved requests that someone else raised and someone else approved, which is what a Procurement user handles:
+ * a request the signed-in user raised or approved cannot be handled by them.
+ */
+function teamSeeds(): PurchaseRequest[] {
+  const L = MOCK_LOOKUPS;
+  const lead = MOCK_DIRECTORY[3];
+  const approved = { decision: "approved" as const, notes: "", decidedAt: "2026-11-07T10:00:00.000Z", decidedBy: lead.email, isOverride: false };
+  const base = {
+    additionalApprovers: [],
+    notes: "",
+    teamLead: lead,
+    teamLeadDecision: approved,
+    budgetApproverId: "10",
+    budgetApproverName: "Budget Owner",
+    vendors: [{ name: "Acme Supplies", website: "https://www.acme.example.com", contact: "", email: "", phone: "" }],
+    budget: {
+      category: codeOf(L.budgetCategories, "Facilities & Office"),
+      businessUnit: codeOf(L.businessUnits, "Facilities & Admin"),
+      product: codeOf(L.products, "Not product-specific"),
+      region: codeOf(L.regions, "APAC - Sri Lanka"),
+      engagementCode: "ENG-2040",
+      salesforceCampaign: "",
+    },
+    category: "NON-IT" as const,
+    submittedAt: "2026-11-06T09:00:00.000Z",
+    updatedAt: "2026-11-07T10:00:00.000Z",
+  };
+  return [
+    {
+      ...base,
+      id: "team-1",
+      reference: "PR-2026-00012",
+      title: "Ergonomic chairs for the Colombo office",
+      status: "approved",
+      requester: MOCK_DIRECTORY[2],
+      priority: null,
+      assignee: "",
+      collaborators: [],
+      event: emptyEvent(),
+      details: { ...emptyDetails(), description: "Forty ergonomic chairs.", businessJustification: "Replaces chairs that are past repair." },
+    },
+    {
+      ...base,
+      id: "team-2",
+      reference: "PR-2026-00013",
+      title: "Printer toner and paper",
+      status: "assigned",
+      requester: MOCK_DIRECTORY[0],
+      priority: "P2",
+      assignee: MOCK_DIRECTORY[1].email,
+      collaborators: [MOCK_DIRECTORY[2].email],
+      event: emptyEvent(),
+      details: { ...emptyDetails(), description: "Toner and paper for the second floor printers.", businessJustification: "Current stock runs out this month." },
+    },
+  ];
+}
+
 /** The most urgent first; a request with no priority yet comes last. */
 const urgencyRank = (priority: Priority | null): number => (priority ? ["P1", "P2", "P3"].indexOf(priority) : 3);
 
@@ -310,11 +372,12 @@ function titleFor(input: PurchaseRequestInput): string {
 function buildMockProcurementApi(user: Person): ProcurementApi {
   const requests: PurchaseRequest[] = seedRequests(user);
   const toApprove: PurchaseRequest[] = approvalSeeds(user);
+  const forTeam: PurchaseRequest[] = teamSeeds();
   let counter = requests.length;
   const me: ProcurementMe = { ...user, roles: ["procurement_user"], teamLead: TEAM_LEAD, approvalExempt: false };
 
   const find = (requestId: string): PurchaseRequest => {
-    const found = [...requests, ...toApprove].find((r) => r.id === requestId);
+    const found = [...requests, ...toApprove, ...forTeam].find((r) => r.id === requestId);
     if (!found) throw new Error("Request not found.");
     return found;
   };
@@ -380,7 +443,8 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
       [...requests]
         .sort((a, b) => (b.submittedAt ?? b.updatedAt).localeCompare(a.submittedAt ?? a.updatedAt))
         .map(({ id, reference, title, category, status, submittedAt, updatedAt }) => ({ id, reference, title, category, status, submittedAt, updatedAt })),
-    getRequest: async (requestId) => find(requestId),
+    // A copy, so that a save which changes the stored request is seen as new data by the screens that read it.
+    getRequest: async (requestId) => ({ ...find(requestId) }),
     submitRequest: async (input) => {
       if (!input.declarationAccepted) throw new Error("Confirm the declaration before submitting.");
       assertApprovers(input);
@@ -459,9 +523,10 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
         updatedAt: new Date().toISOString(),
       });
     },
-    listTeamQueue: async ({ status, priority } = {}) =>
-      [...requests, ...toApprove]
+    listTeamQueue: async ({ status, priority, assignee } = {}) =>
+      [...requests, ...toApprove, ...forTeam]
         .filter((r) => (r.status === "approved" || r.status === "assigned") && (!status || r.status === status) && (!priority || r.priority === priority))
+        .filter((r) => !assignee || r.assignee.toLowerCase() === assignee.toLowerCase())
         .sort((a, b) => urgencyRank(a.priority) - urgencyRank(b.priority))
         .map(({ id, reference, title, category, status: stage, priority: urgency, assignee, requester, updatedAt }) => ({
           id,
@@ -490,6 +555,16 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
       if (found.status !== "approved" && found.status !== "assigned") throw new Error("Only an approved or assigned request has a priority.");
       Object.assign(found, { priority, updatedAt: new Date().toISOString() });
     },
+    changeTeamLead: async (requestId, email) => {
+      const found = find(requestId);
+      if (found.requester.email.toLowerCase() !== user.email.toLowerCase()) throw new Error("Only the requester can change the team lead.");
+      if (found.status !== "submitted" || found.teamLeadDecision.decision !== "pending") throw new Error("The request no longer waits for a decision.");
+      const lead = MOCK_DIRECTORY.find((p) => p.email.toLowerCase() === email.toLowerCase());
+      if (!lead || NON_LEADS.has(lead.email)) throw new Error("The person must be an active team lead.");
+      const taken = [found.requester.email, found.teamLead?.email ?? "", ...found.additionalApprovers].map((e) => e.toLowerCase());
+      if (taken.includes(lead.email.toLowerCase())) throw new Error("That person cannot be the team lead of this request.");
+      Object.assign(found, { teamLead: lead, updatedAt: new Date().toISOString() });
+    },
     cancelRequest: async (requestId) => {
       const existing = find(requestId);
       if (existing.status !== "submitted" && existing.status !== "rejected") {
@@ -505,6 +580,24 @@ function buildMockProcurementApi(user: Person): ProcurementApi {
       const found = (attached.get(requestId) ?? []).find((a) => a.meta.id === attachmentId);
       if (!found) throw new Error("Attachment not found.");
       return found.blob;
+    },
+    listTeamMembers: async () => [...MOCK_TEAM],
+    changeBudget: async (requestId, { budget, budgetApproverId }) => {
+      const found = find(requestId);
+      if (found.status !== "approved" && found.status !== "assigned") throw new Error("Only an approved or assigned request can change its budget.");
+      if (found.category === "NON-IT" && budget.engagementCode.trim() === "") throw new Error("A Non-IT request keeps its engagement code.");
+      Object.assign(found, { budget, budgetApproverId, budgetApproverName: approverName(budgetApproverId), updatedAt: new Date().toISOString() });
+    },
+    addCollaborator: async (requestId, email) => {
+      const found = find(requestId);
+      if (found.status !== "approved" && found.status !== "assigned") throw new Error("Only an approved or assigned request can have collaborators.");
+      if (found.collaborators.some((c) => c.toLowerCase() === email.toLowerCase())) throw new Error("That person is a collaborator already.");
+      if (found.collaborators.length >= MAX_COLLABORATORS) throw new Error(`A request has at most ${MAX_COLLABORATORS} collaborators.`);
+      Object.assign(found, { collaborators: [...found.collaborators, email], updatedAt: new Date().toISOString() });
+    },
+    removeCollaborator: async (requestId, email) => {
+      const found = find(requestId);
+      Object.assign(found, { collaborators: found.collaborators.filter((c) => c.toLowerCase() !== email.toLowerCase()), updatedAt: new Date().toISOString() });
     },
   };
 }

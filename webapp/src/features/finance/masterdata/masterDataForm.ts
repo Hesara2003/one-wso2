@@ -22,6 +22,8 @@ import {
   type DepartmentPayload,
   type ExpenseType,
   type ExpenseTypePayload,
+  type InvoiceAccountMapping,
+  type InvoiceAccountMappingPayload,
   type MasterDataPayload,
   type MasterDataRow,
   type MasterDataTab,
@@ -44,22 +46,28 @@ const OPTIONAL_FIELDS: Record<MasterDataTab, readonly string[]> = {
   departments: [],
   expenseTypes: ["expenseTypeDescription"],
   creditCards: ["comment"],
+  // Blank is a real department here, not an omission: the Intercompany
+  // mappings carry "" on purpose.
+  invoiceAccountMappings: ["department"],
 };
 
 /**
  * Field groups where at least one member must be filled, rather than each
  * one.
  *
- * Expense types are the only tab with one: an expense type is scoped by
- * engagement codes, by engagement-code suffixes, or by both, and the form
- * says so in as many words ("Please fill in at least one of the following
- * fields").
+ * Two tabs have one, and for the same reason: a record scoped by neither
+ * engagement codes nor engagement-code suffixes could never be matched, so
+ * at least one of the pair has to be filled. Both forms say so in as many
+ * words ("Please fill in at least one of the following fields").
  */
 const EITHER_OR_GROUPS: Record<MasterDataTab, readonly (readonly string[])[]> = {
   subsidiaries: [],
   departments: [],
   expenseTypes: [["engagementCodes", "engagementCodeSuffixes"]],
   creditCards: [],
+  // The backend refuses a mapping with neither (400), because Travel looks a
+  // mapping up by one or the other and would never find it.
+  invoiceAccountMappings: [["engagementCodes", "engagementCodeSuffixes"]],
 };
 
 /** Which column each tab sorts by on first paint. */
@@ -68,6 +76,10 @@ export const INITIAL_SORT_FIELD: Record<MasterDataTab, string> = {
   departments: "employeeDepartment",
   expenseTypes: "expenseType",
   creditCards: "employeeEmail",
+  // Unused: this tab is paged on the server, which takes its order from the
+  // request, so the grid is seeded with no sort model at all. Listed because
+  // the map covers every tab.
+  invoiceAccountMappings: "accountNumber",
 };
 
 /**
@@ -110,6 +122,23 @@ export function initialFormData(tab: MasterDataTab, row?: MasterDataRow): Master
         ...(r ? { status: (r.status ?? MASTER_DATA_STATUS.active).toLowerCase() } : {}),
       } satisfies ExpenseTypePayload;
     }
+    case "invoiceAccountMappings": {
+      const r = row as InvoiceAccountMapping | undefined;
+      return {
+        internalId: r?.internalId ?? "",
+        accountNumber: r?.accountNumber ?? "",
+        accountClassification: r?.accountClassification ?? "",
+        engagementCodes: r?.engagementCodes ?? [],
+        engagementCodeSuffixes: r?.engagementCodeSuffixes ?? [],
+        invCostTypeId: r?.invCostTypeId ?? 0,
+        department: r?.department ?? "",
+        // Edits only, as on the other tabs. Nothing is filed inactive, so a
+        // create sends no status and the backend stores it active.
+        // Lower-cased because the column carries "Active" on rows written
+        // before this screen existed.
+        ...(r ? { status: (r.status ?? MASTER_DATA_STATUS.active).toLowerCase() } : {}),
+      } satisfies InvoiceAccountMappingPayload;
+    }
     case "creditCards": {
       const r = row as CreditCard | undefined;
       return {
@@ -143,6 +172,46 @@ export function isCreditCardNumberValid(providerCode: string, ccNumber: string):
   return false;
 }
 
+/**
+ * Whether one engagement code or suffix is storable.
+ *
+ * The two code columns hold their lists comma-separated in a single field, so
+ * a comma inside one element silently becomes two codes, and a space or line
+ * break becomes a code nothing will ever match. Both have reached the table
+ * before now from spreadsheet pastes and had to be scrubbed out of production
+ * by hand, so the rule is enforced here as well as in the backend — the
+ * backend answers a bad one with a 400 the reader cannot act on, while this
+ * says which chip is wrong before Submit is ever enabled.
+ */
+export function isEngagementCodeValid(code: string): boolean {
+  return /^[\p{L}\p{N}_.-]+$/u.test(code);
+}
+
+/**
+ * The codes on this form that could not be stored as typed.
+ *
+ * Codes already on `row` are left out. They reached the table before this
+ * screen existed, and an edit sends only the fields it changed — so a code
+ * nobody touched is never submitted, and refusing it here would block
+ * retiring or re-filing a legacy mapping over a value the backend is not
+ * being asked to accept.
+ *
+ * @param form - The form as it currently stands.
+ * @param row - The record being edited, or absent while creating.
+ * @returns The codes the reader has to fix before Submit.
+ */
+export function invalidEngagementCodes(form: MasterDataPayload, row?: MasterDataRow): string[] {
+  const f = form as InvoiceAccountMappingPayload;
+  const existing = row as InvoiceAccountMapping | undefined;
+  const stored = new Set([
+    ...(existing?.engagementCodes ?? []),
+    ...(existing?.engagementCodeSuffixes ?? []),
+  ]);
+  return [...(f.engagementCodes ?? []), ...(f.engagementCodeSuffixes ?? [])].filter(
+    (code) => !stored.has(code) && !isEngagementCodeValid(code),
+  );
+}
+
 /** "" for a string, 0 for a number, [] (or all-blank) for a list. */
 function isBlank(value: unknown): boolean {
   if (Array.isArray(value)) return value.every((v) => String(v).trim() === "");
@@ -156,7 +225,11 @@ function isBlank(value: unknown): boolean {
  * Required means filled; an either-or group means at least one member filled;
  * and on the card tab the number must also match its provider's format.
  */
-export function isFormComplete(tab: MasterDataTab, form: MasterDataPayload): boolean {
+export function isFormComplete(
+  tab: MasterDataTab,
+  form: MasterDataPayload,
+  row?: MasterDataRow,
+): boolean {
   const optional = OPTIONAL_FIELDS[tab];
   const groups = EITHER_OR_GROUPS[tab];
 
@@ -174,6 +247,11 @@ export function isFormComplete(tab: MasterDataTab, form: MasterDataPayload): boo
 
     if (isBlank(value)) return false;
   }
+
+  // A storable engagement code is part of "filled in" for the same reason a
+  // well-formed card number is below: the reader should not reach Submit on a
+  // value the column cannot hold.
+  if (tab === "invoiceAccountMappings" && invalidEngagementCodes(form, row).length > 0) return false;
 
   // A well-formed card number is part of "filled in", not a separate check
   // the reader discovers only after pressing Submit.

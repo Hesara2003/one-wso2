@@ -46,6 +46,19 @@ const expenseType = {
   status: "inactive",
 };
 
+const invoiceAccountMapping = {
+  id: 14,
+  internalId: "351",
+  accountNumber: "61033-003",
+  accountClassification: "Travel - Air Ticket",
+  engagementCodes: ["RND-GEN-INT"],
+  engagementCodeSuffixes: ["RND-CON"],
+  invCostTypeId: 1,
+  costType: "Air Ticket",
+  department: "Engineering",
+  status: "active",
+};
+
 const subsidiary = {
   id: 1,
   taxCodeInternalId: 7,
@@ -89,6 +102,25 @@ describe("the master-data table's row actions", () => {
     expect(screen.queryByLabelText("Delete")).not.toBeInTheDocument();
   });
 
+  // Invoice Account Mappings too. Retiring one is `status = 'inactive'`,
+  // which is exactly what stops Travel matching it — a hard delete would
+  // throw away the audit trail on a table that decides where money posts.
+  it("offers no Delete on Invoice Account Mappings", () => {
+    show("invoiceAccountMappings", invoiceAccountMapping as MasterDataRow);
+
+    expect(screen.getByLabelText("Edit")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Delete")).not.toBeInTheDocument();
+  });
+
+  // Cost Type is the column that separates a Travel Invoice mapping from a
+  // Per diem one — they are one table, not two, so without it the rows are
+  // indistinguishable on screen.
+  it("shows the cost type a mapping is filed under", () => {
+    show("invoiceAccountMappings", invoiceAccountMapping as MasterDataRow);
+
+    expect(screen.getByText("Air Ticket")).toBeInTheDocument();
+  });
+
   // Subsidiaries and Departments keep theirs — they carry no status column,
   // so a delete is the only way to retire one.
   it("keeps Delete on the tabs that have no status toggle", () => {
@@ -96,5 +128,52 @@ describe("the master-data table's row actions", () => {
 
     expect(screen.getByLabelText("Edit")).toBeInTheDocument();
     expect(screen.getByLabelText("Delete")).toBeInTheDocument();
+  });
+});
+
+// The account name and internal ID have no column of their own on this tab,
+// so the info tooltip is the only place they appear. Reachable by pointer
+// alone, they would not exist at all for anyone using a keyboard or a screen
+// reader, which on the table that decides where money posts is not a
+// cosmetic gap.
+describe("the master-data table's hidden detail", () => {
+  it("names the fields behind the info icon, and lets a keyboard reach them", () => {
+    show("invoiceAccountMappings", invoiceAccountMapping as MasterDataRow);
+
+    const icon = screen.getByRole("img", {
+      name: "Account Name: Travel - Air Ticket, Internal ID: 351",
+    });
+    expect(icon).toHaveAttribute("tabindex", "0");
+  });
+
+  it("says N/A for a detail the row does not carry, as the tooltip does", () => {
+    show("invoiceAccountMappings", {
+      ...invoiceAccountMapping,
+      internalId: "",
+    } as MasterDataRow);
+
+    expect(
+      screen.getByRole("img", { name: "Account Name: Travel - Air Ticket, Internal ID: N/A" }),
+    ).toBeInTheDocument();
+  });
+
+  // Capped at two chips on this tab, so a mapping with three codes keeps one
+  // in the tooltip only.
+  it("names the whole code list when the cell is showing part of it", () => {
+    show("invoiceAccountMappings", {
+      ...invoiceAccountMapping,
+      engagementCodes: ["RND-GEN-INT", "MKT-EVT-IND", "SAL-GEN"],
+    } as MasterDataRow);
+
+    const cell = screen.getByLabelText("RND-GEN-INT, MKT-EVT-IND, SAL-GEN");
+    expect(cell).toHaveAttribute("tabindex", "0");
+  });
+
+  // Nothing hidden, nothing to announce: a label repeating the one chip
+  // already on screen would be read out twice.
+  it("leaves a cell that hides nothing unlabelled and out of the tab order", () => {
+    show("invoiceAccountMappings", invoiceAccountMapping as MasterDataRow);
+
+    expect(screen.queryByLabelText("RND-GEN-INT")).not.toBeInTheDocument();
   });
 });
