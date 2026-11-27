@@ -102,11 +102,6 @@ export const PERSPECTIVE_HUES: Record<string, PerspectiveHue> = {
   // not be told apart from it. Tints computed against the same contrast formula
   // the test uses — 5.07:1 light, 3.91:1 dark, both clear of the 3.5 headroom
   // rule with the wash treatment.
-  csm: {
-    hue: "#9B5DE0",
-    light: { bg: "#F1E8FB", fg: "#7C4AB3" },
-    dark: { bg: "#241D2C", fg: "#9B5DE0" },
-  },
   // Teal, placed between Finance's green (162°) and People's sky blue (207°).
   // At 185° it stays 23° from Finance and 22° from People, wider than the
   // palette's tightest existing pair. The tints measure 5.20:1 in light mode
